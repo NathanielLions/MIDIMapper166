@@ -106,6 +106,8 @@ function getActiveStopsForChannel(channel) {
             let rawChannel = parseInt(match[1]) - 1; 
             if (rawChannel === channel) {
                 stops.forEach(s => {
+                    // Ignore hidden stops
+                    if (s.visible === false) return;
                     let cb = document.getElementById(`stop-${s.val}`);
                     if (cb && cb.checked) activeStops.push(s);
                 });
@@ -172,7 +174,6 @@ let isUpdatingSwitches = false;
 let hiddenChannels = new Set();
 window.pistonsAffectPercussion = false;
 
-// Fixed CC values to prevent overlapping triggers
 let swellCC = 4;
 let percCC = 12;
 
@@ -183,24 +184,25 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
+// ADDED: visible property to all stops
 let organStructure = {
     "Countermelody (Ch 2)": [ 
-        { val: 8, name: "Glockenspiel" }, { val: 10, name: "Unaphone" }, { val: 19, name: "Prestant" }, 
-        { val: 20, name: "Undamaris" }, { val: 71, name: "Clarinet" }, { val: 40, name: "Forte Violin" }, 
-        { val: 73, name: "Flute" }, { val: 75, name: "Flageolet" }, { val: 82, name: "Soft Violin" } 
+        { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
+        { val: 20, name: "Undamaris", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
+        { val: 73, name: "Flute", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true } 
     ],
     "Trumpetmelody (Ch 1)": [ 
-        { val: 68, name: "Viola Bassoon" }, { val: 56, name: "Wooden Trumpet" }, { val: 61, name: "Brass Trumpet" } 
+        { val: 68, name: "Viola Bassoon", visible: true }, { val: 56, name: "Wooden Trumpet", visible: true }, { val: 61, name: "Brass Trumpet", visible: true } 
     ],
     "Accompaniment (Ch 3)": [ 
-        { val: 70, name: "Open Flute" }, { val: 48, name: "Strings" }, { val: 11, name: "Stopped Flute" } 
+        { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
     ],
     "Bass (Ch 4)": [ 
-        { val: 57, name: "Wooden Trombone" }, { val: 50, name: "Brass Trombone" }, { val: 58, name: "Bass Flute" }
+        { val: 57, name: "Wooden Trombone", visible: true }, { val: 50, name: "Brass Trombone", visible: true }, { val: 58, name: "Bass Flute", visible: true }
     ]
 };
 
-// 3-State Piston System (activeStops = ON, offStops = OFF, neither = NEUTRAL)
+// 3-State Piston System
 let pistons = [
     { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
     { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57, 61], swell: 127 },
@@ -211,7 +213,6 @@ let pistons = [
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
-// Initialize missing 'offStops' so old pistons act as General pistons (forcing unlisted stops OFF)
 let allPossibleStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
 pistons.forEach(p => {
     if (!p.offStops) {
@@ -234,7 +235,7 @@ function toggleMidiVals(show) {
 }
 
 // ==========================================
-// NEW 3-STATE UI ENGINE (SETTINGS)
+// NEW VISIBILITY & UI ENGINE (SETTINGS)
 // ==========================================
 function buildSettingsUI() {
     const container = document.getElementById('settings-mapping-container');
@@ -247,19 +248,28 @@ function buildSettingsUI() {
         let color = groupColors[manual.split(' ')[0]] || "#3498db";
         globalHtml += `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:5px;">
             <h4 style="margin: 5px 0; color: ${color}; font-size: 0.85em;">${manual.split(' ')[0]}</h4>`;
+        
         stops.forEach((s, i) => {
-            globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px;">
+            let isVis = s.visible !== false;
+            let eyeOp = isVis ? "1" : "0.3";
+            let textDecor = isVis ? "none" : "line-through";
+            let rowOp = isVis ? "1" : "0.6";
+
+            globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px; opacity: ${rowOp};">
+                <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:${eyeOp}; padding:0;" onclick="toggleRankVisibility('${manual}', ${i})" title="Toggle Visibility">👁️</button>
                 <input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${s.val}" onchange="updateMapping('${manual}', ${i}, 'val', this.value)" title="MIDI CC">
-                <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none;" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
+                <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor};" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
             </div>`;
         });
         globalHtml += `</div>`;
     }
+    
     globalHtml += `<div style="border-left: 3px solid #8e44ad; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:5px;">
         <h4 style="margin: 5px 0; color: #8e44ad; font-size: 0.85em;">Expression</h4>
         <div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${swellCC}" onchange="updateExpMapping('swell', this.value)"><span style="font-size:0.8em;">Swell</span></div>
         <div style="display:flex; align-items:center; gap: 5px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${percCC}" onchange="updateExpMapping('perc', this.value)"><span style="font-size:0.8em;">Percussion</span></div>
     </div></div></div>`;
+    
     container.innerHTML += globalHtml;
 
     let piston = pistons[editingPistonIndex];
@@ -284,6 +294,8 @@ function buildSettingsUI() {
     for (const [manual, stops] of Object.entries(organStructure)) {
         let color = groupColors[manual.split(' ')[0]] || "#3498db";
         stops.forEach(s => {
+            // SKIP HIDDEN STOPS FROM PISTON UI
+            if (s.visible === false) return;
             let state = piston.activeStops.includes(s.val) ? 1 : (piston.offStops.includes(s.val) ? -1 : 0);
             pistonHtml += buildTriStateBox(s.name, s.val, color, state);
         });
@@ -311,7 +323,14 @@ function buildTriStateBox(name, val, color, state) {
     </div>`;
 }
 
-// --- NEW HELPER FUNCTIONS FOR PISTON SETTINGS ---
+// --- TOGGLE RANK VISIBILITY ---
+function toggleRankVisibility(manualKey, index) {
+    let stop = organStructure[manualKey][index];
+    stop.visible = stop.visible === false ? true : false;
+    buildSettingsUI();
+    buildEditorUI();
+}
+
 function switchPistonTab(index) {
     editingPistonIndex = index;
     buildSettingsUI();
@@ -341,7 +360,7 @@ function setTriState(cc, targetState) {
 function updateMapping(manualKey, index, type, newVal) {
     if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
     if (type === 'name') organStructure[manualKey][index].name = newVal;
-    buildSettingsUI(); // Ensure settings reflect the renamed rank
+    buildSettingsUI(); 
     buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
@@ -360,24 +379,35 @@ function buildEditorUI() {
     document.getElementById('col-bass-exp').innerHTML = '';
     document.getElementById('col-pistons').innerHTML = '';
 
+    let hasVisibleCountermelody = false;
+    let hasVisibleAccompaniment = false;
+    let hasVisibleBass = false;
+
     for (const [manual, stops] of Object.entries(organStructure)) {
         let shortMan = manual.split(' ')[0]; let color = groupColors[shortMan] || "#3498db";
+        
+        // Skip building the group if ALL stops inside it are hidden
+        if (stops.every(s => s.visible === false)) continue;
+
         const groupDiv = document.createElement('div'); groupDiv.className = 'manual-group'; groupDiv.style.borderLeftColor = color;
         groupDiv.innerHTML = `<h4 style="color: ${color};">${shortMan} <span class="midi-val" style="color: var(--text-color); font-weight: normal; font-size: 0.8em;">${manual.replace(shortMan, '').trim()}</span></h4><div class="stop-grid"></div>`;
         const grid = groupDiv.querySelector('.stop-grid');
+        
         stops.forEach(s => {
+            // SKIP HIDDEN STOPS FROM EDITOR UI
+            if (s.visible === false) return;
             grid.innerHTML += `<div class="stop-row"><span class="stop-name">${s.name} <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${s.val})</span></span><label class="switch"><input type="checkbox" id="stop-${s.val}" onchange="handleStopToggle(${s.val}, '${s.name}', '${shortMan}', this.checked)"><span class="slider-switch"></span></label></div>`;
         });
-        if (shortMan === "Countermelody") document.getElementById('col-countermelody').appendChild(groupDiv);
-        else if (shortMan === "Accompaniment" || shortMan === "Trumpetmelody") document.getElementById('col-accomp-trumpet').appendChild(groupDiv);
-        else if (shortMan === "Bass") document.getElementById('col-bass-exp').appendChild(groupDiv);
+        
+        if (shortMan === "Countermelody") { document.getElementById('col-countermelody').appendChild(groupDiv); hasVisibleCountermelody = true; }
+        else if (shortMan === "Accompaniment" || shortMan === "Trumpetmelody") { document.getElementById('col-accomp-trumpet').appendChild(groupDiv); hasVisibleAccompaniment = true; }
+        else if (shortMan === "Bass") { document.getElementById('col-bass-exp').appendChild(groupDiv); hasVisibleBass = true; }
     }
 
     const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
     expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
     document.getElementById('col-bass-exp').appendChild(expDiv);
 
-    // FULL WIDTH BUTTONS FOR DASHBOARD PISTONS
     let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
     pistons.forEach((p, i) => {
         let extraStyle = i === pistons.length - 1 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
@@ -471,7 +501,10 @@ function applyRegistrationState(pistonIndex) {
     track.controlChanges[swellCC].push({ ticks: baseTick + currentOffset, number: swellCC, value: p.swell / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
     currentOffset++;
     
-    Object.values(organStructure).flat().map(s => s.val).concat([percCC]).forEach(val => {
+    // ONLY APPLY PISTONS FOR VISIBLE STOPS
+    let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
+    
+    activeOrganStops.forEach(val => {
         if (!window.pistonsAffectPercussion && val === percCC) return;
         let targetCC = null;
         if (p.activeStops.includes(val)) targetCC = 81;
@@ -518,7 +551,11 @@ function syncSwitchesToTimeline(currentTick) {
         let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
         events.sort((a, b) => a.ticks - b.ticks).forEach(e => { if (e.cc === 81) stopStates[e.val] = true; if (e.cc === 80) stopStates[e.val] = false; if (e.cc === swellCC) swellState = (e.val >= 127); });
     }
-    Object.values(organStructure).flat().forEach(s => { let cb = document.getElementById(`stop-${s.val}`); if (cb) cb.checked = !!stopStates[s.val]; });
+    Object.values(organStructure).flat().forEach(s => { 
+        if (s.visible === false) return;
+        let cb = document.getElementById(`stop-${s.val}`); 
+        if (cb) cb.checked = !!stopStates[s.val]; 
+    });
     let pc = document.getElementById(`stop-${percCC}`); if (pc) pc.checked = !!stopStates[percCC];
     let sw = document.getElementById('swell-switch'); if (sw) sw.checked = swellState;
     isUpdatingSwitches = false; 
@@ -554,4 +591,4 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.updatePistonSwell = updatePistonSwell;
+window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.updatePistonSwell = updatePistonSwell; window.toggleRankVisibility = toggleRankVisibility;
