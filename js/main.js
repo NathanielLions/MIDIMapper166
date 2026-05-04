@@ -266,6 +266,47 @@ let percCC = DEFAULT_PERC_CC;
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
 let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
 
+// ==========================================
+// 2.5 PROJECT METADATA ENGINE
+// ==========================================
+function getTodayString() {
+    let d = new Date();
+    let month = '' + (d.getMonth() + 1);
+    let day = '' + d.getDate();
+    let year = d.getFullYear();
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+    return [year, month, day].join('-');
+}
+
+let songMetadata = {
+    title: "Untitled Project",
+    arranger: "Nico",
+    version: "1.0",
+    created: "2026-05-04",
+    modified: "2026-05-04",
+    copyright: "https://nathaniellions.github.io/MIDIMapper166/"
+};
+
+function buildMetadataUI() {
+    document.getElementById('meta-title').value = songMetadata.title;
+    document.getElementById('meta-arranger').value = songMetadata.arranger;
+    document.getElementById('meta-version').value = songMetadata.version;
+    document.getElementById('meta-created').value = songMetadata.created;
+    document.getElementById('meta-modified').value = songMetadata.modified;
+    document.getElementById('meta-copyright').value = songMetadata.copyright;
+}
+
+window.updateMetadata = function(key, val) {
+    songMetadata[key] = val;
+    songMetadata.modified = getTodayString();
+    document.getElementById('meta-modified').value = songMetadata.modified;
+};
+
+// ==========================================
+// CONTINUE LOGIC
+// ==========================================
+
 function updateGlobalStopList() {
     let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
     pistons.forEach(p => {
@@ -634,6 +675,7 @@ function showRemapModal(unknowns) {
 window.onload = () => { 
     fetchSoundfont(); 
     createImportModal();
+    buildMetadataUI();
 };
 
 document.getElementById('midi-upload').addEventListener('change', async (e) => {
@@ -752,7 +794,7 @@ window.deleteAllRemap = function(unknowns) {
 };
 
 // ==========================================
-// 4. NEW: PRE-EDITOR ROUTING ENGINE
+// 4. PRE-EDITOR ROUTING ENGINE
 // ==========================================
 window.buildRoutingUI = function() {
     let activeChannels = new Set();
@@ -808,11 +850,11 @@ window.applyRoutingAndStart = function() {
 
     // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
     const targetMap = {
-        "1": { ch: 0, name: "Percussion", gm: 115 }, // 115 = Woodblock / Trap Drums
-        "2": { ch: 1, name: "Accompaniment", gm: 4 }, // 4 = Electric Piano 1
-        "3": { ch: 2, name: "Trumpetmelody", gm: 56 }, // 56 = Trumpet
-        "4-counter": { ch: 3, name: "Countermelody", gm: 0 }, // 0 = Acoustic Grand Piano
-        "4-bass": { ch: 3, name: "Bass", gm: 32 } // 32 = Acoustic Bass
+        "1": { ch: 0, name: "Percussion", gm: 115 }, 
+        "2": { ch: 1, name: "Accompaniment", gm: 4 }, 
+        "3": { ch: 2, name: "Trumpetmelody", gm: 56 }, 
+        "4-counter": { ch: 3, name: "Countermelody", gm: 0 }, 
+        "4-bass": { ch: 3, name: "Bass", gm: 32 } 
     };
 
     let tracksToRemove = [];
@@ -823,12 +865,8 @@ window.applyRoutingAndStart = function() {
                 tracksToRemove.push(t);
             } else if (targetMap[mapped]) {
                 let dest = targetMap[mapped];
-                
-                // Update Track Logic
                 t.channel = dest.ch;
                 t.name = dest.name;
-                
-                // Inject General MIDI descriptives
                 if (!t.instrument) t.instrument = {};
                 t.instrument.number = dest.gm; 
                 t.instrument.name = dest.name;
@@ -843,6 +881,22 @@ window.applyRoutingAndStart = function() {
 
 function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
+    
+    // EXTRACT METADATA IF EXISTS
+    let sysTrack = getSystemTrack();
+    if (sysTrack && sysTrack.name && sysTrack.name.startsWith("W166_META:")) {
+        try {
+            let parsedMeta = JSON.parse(sysTrack.name.substring(10));
+            songMetadata = { ...songMetadata, ...parsedMeta };
+            songMetadata.modified = getTodayString(); 
+        } catch(e) {}
+    } else {
+        songMetadata.title = fileName; 
+        songMetadata.created = getTodayString();
+        songMetadata.modified = getTodayString();
+    }
+    buildMetadataUI();
+
     currentMidi.tracks.forEach(t => {
         if (t.notes.length > 0) activeChannels.add(t.channel);
         t.notes.forEach(n => { if(n.ticks + n.durationTicks > maxTicks) maxTicks = n.ticks + n.durationTicks; if(n.midi < minMidiNote) minMidiNote = n.midi; if(n.midi > maxMidiNote) maxMidiNote = n.midi; });
@@ -1017,7 +1071,15 @@ function draw() {
 window.exportMidi = function() { 
     if (!currentMidi) return; 
     
-    // Safety sync: Ensure Tone.js binds the notes to the newly updated track channels before compiling
+    // FINAL METADATA INJECTION
+    songMetadata.modified = getTodayString();
+    buildMetadataUI();
+
+    let sysTrack = getOrCreateSystemTrack();
+    sysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
+    currentMidi.header.name = songMetadata.title;
+    currentMidi.name = songMetadata.title;
+    
     currentMidi.tracks.forEach(t => {
         t.notes.forEach(n => n.channel = t.channel);
         Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
@@ -1026,7 +1088,9 @@ window.exportMidi = function() {
     const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
     const a = document.createElement("a"); 
     a.href = URL.createObjectURL(blob); 
-    a.download = fileName + "_W166.mid"; 
+    
+    let safeName = songMetadata.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    a.download = safeName + "_mapped.mid"; 
     a.click(); 
 };
 
@@ -1038,4 +1102,4 @@ window.stopPlayback = stopPlayback;
 window.toggleDarkMode = toggleDarkMode;
 window.toggleMidiVals = toggleMidiVals;
 
-buildSettingsUI(); buildEditorUI();
+buildSettingsUI(); buildEditorUI(); buildMetadataUI();
