@@ -402,6 +402,15 @@ function buildEditorUI() {
     document.getElementById('col-pistons').innerHTML = pistonsHtml;
 }
 
+// --- MISSING TAB FUNCTION ADDED BACK IN ---
+function openTab(tabId, btnElement) {
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    if(btnElement) btnElement.classList.add('active');
+    if (tabId === 'page-editor' && currentMidi) setTimeout(() => draw(), 10);
+}
+
 // ==========================================
 // 3. IMPORT INTERCEPTOR & MODAL LOGIC
 // ==========================================
@@ -451,10 +460,8 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
 function handleImportChoice(choice) {
     document.getElementById('import-modal').style.display = 'none';
     if (choice === 'clear') {
-        // Destroy the System Track entirely before loading
         currentMidi.tracks = currentMidi.tracks.filter(t => t.channel !== 15);
     }
-    // If 'modify', we do nothing and let it load normally.
     finalizeImport();
 }
 
@@ -625,4 +632,5 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
 window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
+
 buildSettingsUI(); buildEditorUI();
