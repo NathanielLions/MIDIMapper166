@@ -170,7 +170,6 @@ let maxMidiNote = 0;
 let isUpdatingSwitches = false; 
 
 let hiddenChannels = new Set();
-window.pistonsAffectPercussion = false;
 
 let swellCC = 4;
 let percCC = 12;
@@ -200,10 +199,10 @@ let organStructure = {
     ]
 };
 
-// 3-State Piston System
+// 3-State Piston System (Updated per images)
 let pistons = [
-    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 58], swell: 64 }, // Softest foundations
-    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, // Full organ
+    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58], swell: 64 }, 
+    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
     { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58], swell: 127 }, 
     { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58], swell: 127 },
     { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, 
@@ -302,7 +301,7 @@ function buildSettingsUI() {
             let rowOp = isVis ? "1" : "0.6";
 
             globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 5px; opacity: ${rowOp};">
-                <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:0.6; padding:0; margin-right: 5px; transition: 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#e74c3c';" onmouseout="this.style.opacity='0.6'; this.style.color='inherit';" onclick="deleteRank('${manual}', ${i})" title="Delete Stop">🗑️</button>
+                <button style="background:#e74c3c; border:none; border-radius: 3px; cursor:pointer; font-size:0.7em; color: white; padding:2px 5px; margin-right: 5px;" onclick="deleteRank('${manual}', ${i})" title="Delete Stop">🗑️</button>
                 <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:${eyeOp}; padding:0;" onclick="toggleRankVisibility('${manual}', ${i})" title="Toggle Visibility">👁️</button>
                 <input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${s.val}" onchange="updateMapping('${manual}', ${i}, 'val', this.value)" title="MIDI CC">
                 <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor}; width: 120px;" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
@@ -746,7 +745,12 @@ function applyRegistrationState(pistonIndex) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => { if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true; return Math.abs(e.ticks - baseTick) > 40; }); });
+    [swellCC, 80, 81].forEach(cc => { 
+        if (track.controlChanges[cc]) {
+            track.controlChanges[cc] = track.controlChanges[cc].filter(e => Math.abs(e.ticks - baseTick) > 40); 
+        }
+    });
+    
     let currentOffset = 0; 
     
     if (p.swellState !== 0) {
@@ -759,7 +763,6 @@ function applyRegistrationState(pistonIndex) {
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
     
     activeOrganStops.forEach(val => {
-        if (!window.pistonsAffectPercussion && val === percCC) return;
         let targetCC = null;
         if (p.activeStops.includes(val)) targetCC = 81;
         else if (p.offStops.includes(val)) targetCC = 80;
