@@ -467,6 +467,13 @@ function createImportModal() {
     document.body.appendChild(modal);
 }
 
+window.toggleRemapRow = function(val) {
+    let act = document.getElementById(`action-${val}`).value;
+    document.getElementById(`target-${val}`).style.display = act === 'replace' ? 'block' : 'none';
+    document.getElementById(`name-${val}`).style.display = act === 'add' ? 'block' : 'none';
+    document.getElementById(`manual-${val}`).style.display = act === 'add' ? 'block' : 'none';
+};
+
 function showRemapModal(unknowns) {
     if(!document.getElementById('remap-modal')) {
         const modal = document.createElement('div');
@@ -477,26 +484,47 @@ function showRemapModal(unknowns) {
     const modal = document.getElementById('remap-modal');
     
     let manualOptions = Object.keys(organStructure).map(k => `<option value="${k}">${k.split(' ')[0]}</option>`).join('');
+    
+    let stopOptions = '';
+    for (const [man, stops] of Object.entries(organStructure)) {
+        let shortMan = man.split(' ')[0];
+        stops.forEach(s => {
+            stopOptions += `<option value="${s.val}">${s.name} (${shortMan})</option>`;
+        });
+    }
 
-    let html = `<div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:500px; width: 100%; text-align:left; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 80vh; overflow-y: auto;">
+    let html = `<div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:650px; width: 100%; text-align:left; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 85vh; overflow-y: auto;">
         <h3 style="margin-top:0; color:#e74c3c; font-size:1.4em; text-align:center;">Unknown Stops Detected</h3>
-        <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4; text-align:center;">We found legacy CC signals that don't match your current setup. Assign them below so they appear in your editor.</p>
-        <div id="remap-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom: 20px;">`;
+        <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4; text-align:center;">Choose how you want to handle these unrecognized CC signals.</p>
+        <div id="remap-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom: 25px;">`;
 
     unknowns.forEach(val => {
-        html += `<div style="display:flex; gap: 10px; align-items:center; background: var(--stop-row-bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border-color);">
-            <span style="font-weight:bold; color:#f1c40f; width: 60px;">CC ${val}</span>
-            <input type="text" id="remap-name-${val}" class="mapping-input" placeholder="Stop Name" style="flex:1;">
-            <select id="remap-manual-${val}" class="mapping-input" style="flex:1; cursor:pointer;">
+        html += `<div style="display:flex; gap: 8px; align-items:center; background: var(--stop-row-bg); padding: 12px; border-radius: 5px; border: 1px solid var(--border-color); flex-wrap: wrap;">
+            <span style="font-weight:bold; color:#f1c40f; width: 60px; font-size: 1.1em;">CC ${val}</span>
+            
+            <select id="action-${val}" class="mapping-input" style="flex: 1; min-width: 130px; cursor:pointer;" onchange="toggleRemapRow(${val})">
+                <option value="ignore" selected>Ignore (Keep in File)</option>
+                <option value="replace">Replace Existing Stop</option>
+                <option value="add">Add as New Stop</option>
+                <option value="delete">Delete from MIDI</option>
+            </select>
+
+            <select id="target-${val}" class="mapping-input" style="flex: 2; display:none; cursor:pointer;">
+                ${stopOptions}
+            </select>
+
+            <input type="text" id="name-${val}" class="mapping-input" placeholder="New Stop Name" style="flex: 1.5; display:none;">
+            <select id="manual-${val}" class="mapping-input" style="flex: 1; display:none; cursor:pointer;">
                 ${manualOptions}
             </select>
         </div>`;
     });
 
     html += `</div>
-        <div style="display:flex; justify-content:center; gap: 10px;">
-            <button class="nudge-btn" style="background:#e74c3c; color:white; border:none; padding:10px 20px; font-size:1em;" onclick="skipRemap()">Ignore</button>
-            <button class="nudge-btn" style="background:#2ecc71; color:white; border:none; padding:10px 20px; font-size:1em;" onclick="applyRemap([${unknowns.join(',')}])">Add Mappings</button>
+        <div style="display:flex; justify-content:center; gap: 10px; flex-wrap: wrap;">
+            <button class="nudge-btn" style="background:#95a5a6; color:white; border:none; padding:10px 15px; font-size:0.9em;" onclick="ignoreAllRemap()">Ignore All</button>
+            <button class="nudge-btn" style="background:#c0392b; color:white; border:none; padding:10px 15px; font-size:0.9em;" onclick="deleteAllRemap([${unknowns.join(',')}])">Delete All Unknowns</button>
+            <button class="nudge-btn" style="background:#2ecc71; color:white; border:none; padding:10px 20px; font-size:1em; font-weight:bold;" onclick="processRemap([${unknowns.join(',')}])">Process Mappings</button>
         </div>
     </div>`;
     modal.innerHTML = html;
@@ -532,7 +560,6 @@ function handleImportChoice(choice) {
         }
         finalizeImport();
     } else {
-        // MODIFY CHOICE
         let unknowns = getUnknownStops(sysTrack);
         if (unknowns.length > 0) {
             showRemapModal(unknowns);
@@ -542,21 +569,65 @@ function handleImportChoice(choice) {
     }
 }
 
-function applyRemap(unknowns) {
+// BULK ACTION PROCESSING
+window.processRemap = function(unknowns) {
+    let sysTrack = getSystemTrack();
+    let oldToNewCCs = {};
+
     unknowns.forEach(val => {
-        let nameField = document.getElementById(`remap-name-${val}`).value.trim();
-        let name = nameField !== "" ? nameField : `Recovered CC ${val}`;
-        let manualKey = document.getElementById(`remap-manual-${val}`).value;
-        
-        organStructure[manualKey].push({ val: val, name: name, visible: true });
+        let act = document.getElementById(`action-${val}`).value;
+
+        if (act === 'ignore') {
+            return; // Do nothing, just leave it in the track unmapped
+        } 
+        else if (act === 'delete') {
+            if (sysTrack) {
+                [80, 81].forEach(cc => {
+                    if(sysTrack.controlChanges[cc]) {
+                        sysTrack.controlChanges[cc] = sysTrack.controlChanges[cc].filter(e => Math.round(e.value * 127) !== val);
+                    }
+                });
+            }
+        } 
+        else if (act === 'replace') {
+            let oldCC = parseInt(document.getElementById(`target-${val}`).value);
+            let existingStop = null;
+            for (const [man, stops] of Object.entries(organStructure)) {
+                let found = stops.find(s => s.val === oldCC);
+                if (found) { existingStop = found; break; }
+            }
+            if (existingStop) {
+                existingStop.val = val;
+                oldToNewCCs[oldCC] = val; // Track for piston updating
+            }
+        } 
+        else if (act === 'add') {
+            let name = document.getElementById(`name-${val}`).value.trim() || `Recovered CC ${val}`;
+            let manualKey = document.getElementById(`manual-${val}`).value;
+            organStructure[manualKey].push({ val: val, name: name, visible: true });
+        }
     });
-    
-    // Ensure the new possible stops are known to the piston system
+
+    // Update Pistons globally so they don't break when CC numbers change
     let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
+
     pistons.forEach(p => {
-        newAllStops.forEach(cc => { 
+        for (let oldCC in oldToNewCCs) {
+            let oldInt = parseInt(oldCC);
+            let newInt = oldToNewCCs[oldCC];
+
+            if (p.activeStops.includes(oldInt)) {
+                p.activeStops = p.activeStops.filter(c => c !== oldInt);
+                p.activeStops.push(newInt);
+            }
+            if (p.offStops.includes(oldInt)) {
+                p.offStops = p.offStops.filter(c => c !== oldInt);
+                p.offStops.push(newInt);
+            }
+        }
+        newAllStops.forEach(cc => {
             if (!p.activeStops.includes(cc) && !p.offStops.includes(cc)) {
-                p.offStops.push(cc); // Default new stops to OFF for existing pistons
+                p.offStops.push(cc);
             }
         });
     });
@@ -565,12 +636,27 @@ function applyRemap(unknowns) {
     buildSettingsUI();
     buildEditorUI();
     finalizeImport();
-}
+};
 
-function skipRemap() {
+window.ignoreAllRemap = function() {
     document.getElementById('remap-modal').style.display = 'none';
     finalizeImport();
-}
+};
+
+window.deleteAllRemap = function(unknowns) {
+    let sysTrack = getSystemTrack();
+    if (sysTrack) {
+        unknowns.forEach(val => {
+            [80, 81].forEach(cc => {
+                if(sysTrack.controlChanges[cc]) {
+                    sysTrack.controlChanges[cc] = sysTrack.controlChanges[cc].filter(e => Math.round(e.value * 127) !== val);
+                }
+            });
+        });
+    }
+    document.getElementById('remap-modal').style.display = 'none';
+    finalizeImport();
+};
 
 function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
@@ -736,7 +822,7 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // ==========================================
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
-window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice; window.applyRemap = applyRemap; window.skipRemap = skipRemap;
+window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons; window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
+window.toggleRemapRow = toggleRemapRow; window.processRemap = processRemap; window.ignoreAllRemap = ignoreAllRemap; window.deleteAllRemap = deleteAllRemap;
 
 buildSettingsUI(); buildEditorUI();
