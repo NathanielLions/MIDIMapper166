@@ -184,7 +184,6 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-// ADDED: visible property to all stops
 let organStructure = {
     "Countermelody (Ch 2)": [ 
         { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
@@ -218,6 +217,10 @@ pistons.forEach(p => {
     if (!p.offStops) {
         p.offStops = [];
         allPossibleStops.forEach(cc => { if (!p.activeStops.includes(cc)) p.offStops.push(cc); });
+    }
+    // Initialize 3-state Swell (1 = Open, 0 = Ignore, -1 = Closed)
+    if (p.swellState === undefined) {
+        p.swellState = p.swell >= 127 ? 1 : -1;
     }
 });
 
@@ -284,41 +287,42 @@ function buildSettingsUI() {
     
     pistonHtml += `</div>
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; background: var(--stop-row-bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border-color);">
-            <input type="text" class="mapping-input" style="width: 200px; text-align: left; font-size: 1em;" value="${piston.name}" onchange="updatePistonName(${editingPistonIndex}, this.value)" title="Rename Piston">
-            <label class="switch" title="Swell Shutters Open"><input type="checkbox" ${piston.swell >= 127 ? "checked" : ""} onchange="updatePistonSwell(${editingPistonIndex}, this.checked)"><span class="slider-switch swell-bg"></span></label>
-            <span style="font-size:0.9em; font-weight:bold; color:#8e44ad;">Swell Open</span>
+            <input type="text" class="mapping-input" style="width: 250px; text-align: left; font-size: 1em;" value="${piston.name}" onchange="updatePistonName(${editingPistonIndex}, this.value)" title="Rename Piston">
         </div>
         
         <div style="display: flex; flex-wrap: wrap; gap: 8px;">`;
 
     for (const [manual, stops] of Object.entries(organStructure)) {
-        let color = groupColors[manual.split(' ')[0]] || "#3498db";
         stops.forEach(s => {
             // SKIP HIDDEN STOPS FROM PISTON UI
             if (s.visible === false) return;
             let state = piston.activeStops.includes(s.val) ? 1 : (piston.offStops.includes(s.val) ? -1 : 0);
-            pistonHtml += buildTriStateBox(s.name, s.val, color, state);
+            pistonHtml += buildTriStateBox(s.name, s.val, state, 'stop');
         });
     }
     
     let percState = piston.activeStops.includes(percCC) ? 1 : (piston.offStops.includes(percCC) ? -1 : 0);
-    pistonHtml += buildTriStateBox("Percussion", percCC, "#8e44ad", percState);
+    pistonHtml += buildTriStateBox("Percussion", percCC, percState, 'stop');
+    
+    // Add Swell directly to the grid
+    pistonHtml += buildTriStateBox("Swell Shutters", swellCC, piston.swellState, 'swell');
 
     pistonHtml += `</div></div>`;
     container.innerHTML += pistonHtml;
 }
 
-function buildTriStateBox(name, val, color, state) {
+function buildTriStateBox(name, val, state, type = 'stop') {
     let offOp = state === -1 ? '1' : '0.3';
     let neutOp = state === 0 ? '1' : '0.3';
     let onOp = state === 1 ? '1' : '0.3';
 
+    // The 'On' color is now universally Green (#2ecc71)
     return `<div style="background: var(--stop-row-bg); padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; display: flex; flex-direction: column; gap: 6px; min-width: 140px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div style="font-size: 0.85em; font-weight: bold; text-align: center; color: var(--text-color);">${name}</div>
         <div style="display: flex; gap: 4px;">
-            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#e74c3c; opacity:${offOp}; transition:0.2s;" onclick="setTriState(${val}, -1)">✖</button>
-            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#95a5a6; opacity:${neutOp}; transition:0.2s;" onclick="setTriState(${val}, 0)">/</button>
-            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:${color}; opacity:${onOp}; transition:0.2s;" onclick="setTriState(${val}, 1)">✔</button>
+            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#e74c3c; opacity:${offOp}; transition:0.2s;" onclick="setTriState(${val}, -1, '${type}')">✖</button>
+            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#95a5a6; opacity:${neutOp}; transition:0.2s;" onclick="setTriState(${val}, 0, '${type}')">/</button>
+            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#2ecc71; opacity:${onOp}; transition:0.2s;" onclick="setTriState(${val}, 1, '${type}')">✔</button>
         </div>
     </div>`;
 }
@@ -342,17 +346,18 @@ function updatePistonName(index, newName) {
     buildEditorUI();
 }
 
-function updatePistonSwell(index, isChecked) {
-    pistons[index].swell = isChecked ? 127 : 64;
-}
-
-function setTriState(cc, targetState) {
+function setTriState(val, targetState, type) {
     let p = pistons[editingPistonIndex];
-    p.activeStops = p.activeStops.filter(v => v !== cc);
-    p.offStops = p.offStops.filter(v => v !== cc);
     
-    if (targetState === 1) p.activeStops.push(cc);
-    else if (targetState === -1) p.offStops.push(cc);
+    if (type === 'swell') {
+        p.swellState = targetState;
+    } else {
+        p.activeStops = p.activeStops.filter(v => v !== val);
+        p.offStops = p.offStops.filter(v => v !== val);
+        
+        if (targetState === 1) p.activeStops.push(val);
+        else if (targetState === -1) p.offStops.push(val);
+    }
     
     buildSettingsUI(); 
 }
@@ -497,9 +502,13 @@ function applyRegistrationState(pistonIndex) {
     [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => { if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true; return Math.abs(e.ticks - baseTick) > 40; }); });
     let currentOffset = 0; 
     
-    if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
-    track.controlChanges[swellCC].push({ ticks: baseTick + currentOffset, number: swellCC, value: p.swell / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
-    currentOffset++;
+    // APPLY 3-STATE SWELL
+    if (p.swellState !== 0) {
+        let swellVal = p.swellState === 1 ? 127 : 64;
+        if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
+        track.controlChanges[swellCC].push({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+        currentOffset++;
+    }
     
     // ONLY APPLY PISTONS FOR VISIBLE STOPS
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
@@ -591,4 +600,4 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.updatePistonSwell = updatePistonSwell; window.toggleRankVisibility = toggleRankVisibility;
+window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility;
