@@ -14,17 +14,27 @@
     <h1>Wurlitzer 166 Studio</h1>
 
     <div class="tabs-nav">
-        <button class="tab-btn active" id="tab-import" onclick="openTab('page-import', this)">1. Import</button>
+        <button class="tab-btn active" id="tab-import" onclick="openTab('page-import', this)">1. Import & Routing</button>
         <button class="tab-btn" id="tab-editor" onclick="openTab('page-editor', this)">2. Editor</button>
         <button class="tab-btn" id="tab-export" onclick="openTab('page-export', this)">3. History & Export</button>
         <button class="tab-btn" id="tab-settings" onclick="openTab('page-settings', this)">4. Settings</button>
     </div>
 
     <div id="page-import" class="tab-content active">
-        <div class="panel" style="text-align: center; padding: 40px 20px;">
+        <div id="upload-panel" class="panel" style="text-align: center; padding: 40px 20px;">
             <h3>Select a MIDI File to Begin</h3>
             <p style="color: #7f8c8d; margin-bottom: 20px;">Load your standard MIDI file to start mapping Wurlitzer stops.</p>
             <input type="file" id="midi-upload" accept=".mid,.midi" style="font-size: 1.1em; padding: 10px; border: 2px dashed #3498db; border-radius: 8px; background: var(--manual-bg); color: var(--text-color); cursor: pointer;">
+        </div>
+
+        <div id="routing-panel" class="panel" style="display: none;">
+            <h3>Track Routing & Channel Setup</h3>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Assign your imported MIDI channels to the correct Wurlitzer manuals. This ensures the exported file has the correct channel structure (Ch 1-4).</p>
+            
+            <div id="routing-list" style="display: flex; flex-direction: column; gap: 8px;">
+                </div>
+
+            <button class="nudge-btn" onclick="applyRoutingAndStart()" style="background: #2ecc71; color: white; width: 100%; margin-top: 25px; font-size: 1.1em; padding: 12px; font-weight: bold; border: none;">Confirm Routing & Open Editor</button>
         </div>
     </div>
 
