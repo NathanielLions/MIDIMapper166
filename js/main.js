@@ -20,7 +20,6 @@ async function fetchSoundfont() {
         document.getElementById('audio-status').innerText = "";
     }
 }
-window.onload = fetchSoundfont;
 
 function initAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -135,7 +134,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
         
         if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
         else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
-        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; // 42 is Cello
+        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; 
         else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
         else osc.type = 'square';
         
@@ -191,7 +190,7 @@ let organStructure = {
     ],
     "Trumpetmelody (Ch 1)": [ 
         { val: 68, name: "Viola Bassoon", visible: true }, { val: 56, name: "Wooden Trumpet", visible: true }, { val: 61, name: "Brass Trumpet", visible: true },
-        { val: 42, name: "Cello", visible: true } // NEW CELLO RANK
+        { val: 42, name: "Cello", visible: true } 
     ],
     "Accompaniment (Ch 3)": [ 
         { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
@@ -218,7 +217,6 @@ pistons.forEach(p => {
         p.offStops = [];
         allPossibleStops.forEach(cc => { if (!p.activeStops.includes(cc)) p.offStops.push(cc); });
     }
-    // Initialize 3-state Swell (1 = Open, 0 = Ignore, -1 = Closed)
     if (p.swellState === undefined) {
         p.swellState = p.swell >= 127 ? 1 : -1;
     }
@@ -323,7 +321,6 @@ function buildTriStateBox(name, val, state, type = 'stop') {
     </div>`;
 }
 
-// --- TOGGLE RANK VISIBILITY ---
 function toggleRankVisibility(manualKey, index) {
     let stop = organStructure[manualKey][index];
     stop.visible = stop.visible === false ? true : false;
@@ -344,33 +341,27 @@ function updatePistonName(index, newName) {
 
 function setTriState(val, targetState, type) {
     let p = pistons[editingPistonIndex];
-    
-    if (type === 'swell') {
-        p.swellState = targetState;
-    } else {
+    if (type === 'swell') { p.swellState = targetState; } 
+    else {
         p.activeStops = p.activeStops.filter(v => v !== val);
         p.offStops = p.offStops.filter(v => v !== val);
-        
         if (targetState === 1) p.activeStops.push(val);
         else if (targetState === -1) p.offStops.push(val);
     }
-    
     buildSettingsUI(); 
 }
 
 function updateMapping(manualKey, index, type, newVal) {
     if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
     if (type === 'name') organStructure[manualKey][index].name = newVal;
-    buildSettingsUI(); 
-    buildEditorUI();
+    buildSettingsUI(); buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
 
 function updateExpMapping(type, newVal) {
     if (type === 'swell') swellCC = parseInt(newVal);
     if (type === 'perc') percCC = parseInt(newVal);
-    buildSettingsUI();
-    buildEditorUI();
+    buildSettingsUI(); buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
 
@@ -380,13 +371,8 @@ function buildEditorUI() {
     document.getElementById('col-bass-exp').innerHTML = '';
     document.getElementById('col-pistons').innerHTML = '';
 
-    let hasVisibleCountermelody = false;
-    let hasVisibleAccompaniment = false;
-    let hasVisibleBass = false;
-
     for (const [manual, stops] of Object.entries(organStructure)) {
         let shortMan = manual.split(' ')[0]; let color = groupColors[shortMan] || "#3498db";
-        
         if (stops.every(s => s.visible === false)) continue;
 
         const groupDiv = document.createElement('div'); groupDiv.className = 'manual-group'; groupDiv.style.borderLeftColor = color;
@@ -398,9 +384,9 @@ function buildEditorUI() {
             grid.innerHTML += `<div class="stop-row"><span class="stop-name">${s.name} <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${s.val})</span></span><label class="switch"><input type="checkbox" id="stop-${s.val}" onchange="handleStopToggle(${s.val}, '${s.name}', '${shortMan}', this.checked)"><span class="slider-switch"></span></label></div>`;
         });
         
-        if (shortMan === "Countermelody") { document.getElementById('col-countermelody').appendChild(groupDiv); hasVisibleCountermelody = true; }
-        else if (shortMan === "Accompaniment" || shortMan === "Trumpetmelody") { document.getElementById('col-accomp-trumpet').appendChild(groupDiv); hasVisibleAccompaniment = true; }
-        else if (shortMan === "Bass") { document.getElementById('col-bass-exp').appendChild(groupDiv); hasVisibleBass = true; }
+        if (shortMan === "Countermelody") { document.getElementById('col-countermelody').appendChild(groupDiv); }
+        else if (shortMan === "Accompaniment" || shortMan === "Trumpetmelody") { document.getElementById('col-accomp-trumpet').appendChild(groupDiv); }
+        else if (shortMan === "Bass") { document.getElementById('col-bass-exp').appendChild(groupDiv); }
     }
 
     const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
@@ -416,20 +402,63 @@ function buildEditorUI() {
     document.getElementById('col-pistons').innerHTML = pistonsHtml;
 }
 
-buildSettingsUI(); buildEditorUI();
-
-function openTab(tabId, btnElement) {
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    if(btnElement) btnElement.classList.add('active');
-    if (tabId === 'page-editor' && currentMidi) setTimeout(() => draw(), 10);
+// ==========================================
+// 3. IMPORT INTERCEPTOR & MODAL LOGIC
+// ==========================================
+function createImportModal() {
+    if(document.getElementById('import-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'import-modal';
+    modal.style.cssText = "display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(3px);";
+    modal.innerHTML = `
+        <div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:400px; text-align:center; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <h3 style="margin-top:0; color:#f39c12; font-size:1.4em;">Organ Data Detected</h3>
+            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Wurlitzer registration data on Track 15. How would you like to proceed?</p>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+                <button class="nudge-btn" style="background:#3498db; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('modify')">Modify Existing Mappings</button>
+                <button class="nudge-btn" style="background:#e74c3c; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('clear')">Start Over (Clear Mappings)</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 }
+
+window.onload = () => { 
+    fetchSoundfont(); 
+    createImportModal();
+};
 
 document.getElementById('midi-upload').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
     currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
+    
+    // Detection Logic: Does Track 15 exist and contain CC 4, 80, or 81?
+    let systemTrack = currentMidi.tracks.find(t => t.channel === 15);
+    let hasOrganData = false;
+    
+    if (systemTrack) {
+        hasOrganData = [swellCC, 80, 81].some(cc => systemTrack.controlChanges[cc] && systemTrack.controlChanges[cc].length > 0);
+    }
+    
+    if (hasOrganData) {
+        document.getElementById('import-modal').style.display = 'flex';
+    } else {
+        finalizeImport(); 
+    }
+});
+
+function handleImportChoice(choice) {
+    document.getElementById('import-modal').style.display = 'none';
+    if (choice === 'clear') {
+        // Destroy the System Track entirely before loading
+        currentMidi.tracks = currentMidi.tracks.filter(t => t.channel !== 15);
+    }
+    // If 'modify', we do nothing and let it load normally.
+    finalizeImport();
+}
+
+function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
     currentMidi.tracks.forEach(t => {
         if (t.notes.length > 0) activeChannels.add(t.channel);
@@ -444,8 +473,11 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     });
     const slider = document.getElementById('tick-slider'); slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
     document.getElementById('zoom-slider').disabled = false; document.getElementById('current-tick').innerText = '0';
-    document.getElementById('export-btn').style.display = 'block'; renderLog(); syncSwitchesToTimeline(0); openTab('page-editor', document.getElementById('tab-editor'));
-});
+    document.getElementById('export-btn').style.display = 'block'; 
+    renderLog(); 
+    syncSwitchesToTimeline(0); 
+    openTab('page-editor', document.getElementById('tab-editor'));
+}
 
 window.addEventListener('resize', () => { if (currentMidi) draw(); });
 
@@ -592,4 +624,5 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility;
+window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
+buildSettingsUI(); buildEditorUI();
