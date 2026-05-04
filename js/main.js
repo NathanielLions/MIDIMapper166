@@ -106,7 +106,6 @@ function getActiveStopsForChannel(channel) {
             let rawChannel = parseInt(match[1]) - 1; 
             if (rawChannel === channel) {
                 stops.forEach(s => {
-                    // Ignore hidden stops
                     if (s.visible === false) return;
                     let cb = document.getElementById(`stop-${s.val}`);
                     if (cb && cb.checked) activeStops.push(s);
@@ -136,7 +135,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
         
         if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
         else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
-        else if ([40, 82, 68, 48, 50].includes(stop.val)) osc.type = 'sawtooth';
+        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; // 42 is Cello
         else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
         else osc.type = 'square';
         
@@ -191,7 +190,8 @@ let organStructure = {
         { val: 73, name: "Flute", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true } 
     ],
     "Trumpetmelody (Ch 1)": [ 
-        { val: 68, name: "Viola Bassoon", visible: true }, { val: 56, name: "Wooden Trumpet", visible: true }, { val: 61, name: "Brass Trumpet", visible: true } 
+        { val: 68, name: "Viola Bassoon", visible: true }, { val: 56, name: "Wooden Trumpet", visible: true }, { val: 61, name: "Brass Trumpet", visible: true },
+        { val: 42, name: "Cello", visible: true } // NEW CELLO RANK
     ],
     "Accompaniment (Ch 3)": [ 
         { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
@@ -204,10 +204,10 @@ let organStructure = {
 // 3-State Piston System
 let pistons = [
     { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
-    { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57, 61], swell: 127 },
+    { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57, 61, 42], swell: 127 },
     { name: "Piston Default 1", activeStops: [19, 40, 10, 70, 48, 70, 11, 68, 57, 61, 58, 50], swell: 127 }, 
     { name: "Piston Default 2", activeStops: [8, 19, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
-    { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 61, 70, 11, 48, 56, 68], swell: 127 }, 
+    { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 61, 70, 11, 48, 56, 68, 42], swell: 127 }, 
     { name: "Piston Default 4", activeStops: [], swell: 64 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
@@ -294,7 +294,6 @@ function buildSettingsUI() {
 
     for (const [manual, stops] of Object.entries(organStructure)) {
         stops.forEach(s => {
-            // SKIP HIDDEN STOPS FROM PISTON UI
             if (s.visible === false) return;
             let state = piston.activeStops.includes(s.val) ? 1 : (piston.offStops.includes(s.val) ? -1 : 0);
             pistonHtml += buildTriStateBox(s.name, s.val, state, 'stop');
@@ -303,8 +302,6 @@ function buildSettingsUI() {
     
     let percState = piston.activeStops.includes(percCC) ? 1 : (piston.offStops.includes(percCC) ? -1 : 0);
     pistonHtml += buildTriStateBox("Percussion", percCC, percState, 'stop');
-    
-    // Add Swell directly to the grid
     pistonHtml += buildTriStateBox("Swell Shutters", swellCC, piston.swellState, 'swell');
 
     pistonHtml += `</div></div>`;
@@ -316,7 +313,6 @@ function buildTriStateBox(name, val, state, type = 'stop') {
     let neutOp = state === 0 ? '1' : '0.3';
     let onOp = state === 1 ? '1' : '0.3';
 
-    // The 'On' color is now universally Green (#2ecc71)
     return `<div style="background: var(--stop-row-bg); padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; display: flex; flex-direction: column; gap: 6px; min-width: 140px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div style="font-size: 0.85em; font-weight: bold; text-align: center; color: var(--text-color);">${name}</div>
         <div style="display: flex; gap: 4px;">
@@ -391,7 +387,6 @@ function buildEditorUI() {
     for (const [manual, stops] of Object.entries(organStructure)) {
         let shortMan = manual.split(' ')[0]; let color = groupColors[shortMan] || "#3498db";
         
-        // Skip building the group if ALL stops inside it are hidden
         if (stops.every(s => s.visible === false)) continue;
 
         const groupDiv = document.createElement('div'); groupDiv.className = 'manual-group'; groupDiv.style.borderLeftColor = color;
@@ -399,7 +394,6 @@ function buildEditorUI() {
         const grid = groupDiv.querySelector('.stop-grid');
         
         stops.forEach(s => {
-            // SKIP HIDDEN STOPS FROM EDITOR UI
             if (s.visible === false) return;
             grid.innerHTML += `<div class="stop-row"><span class="stop-name">${s.name} <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${s.val})</span></span><label class="switch"><input type="checkbox" id="stop-${s.val}" onchange="handleStopToggle(${s.val}, '${s.name}', '${shortMan}', this.checked)"><span class="slider-switch"></span></label></div>`;
         });
@@ -502,7 +496,6 @@ function applyRegistrationState(pistonIndex) {
     [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => { if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true; return Math.abs(e.ticks - baseTick) > 40; }); });
     let currentOffset = 0; 
     
-    // APPLY 3-STATE SWELL
     if (p.swellState !== 0) {
         let swellVal = p.swellState === 1 ? 127 : 64;
         if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
@@ -510,7 +503,6 @@ function applyRegistrationState(pistonIndex) {
         currentOffset++;
     }
     
-    // ONLY APPLY PISTONS FOR VISIBLE STOPS
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
     
     activeOrganStops.forEach(val => {
