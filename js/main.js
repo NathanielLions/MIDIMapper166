@@ -269,13 +269,13 @@ function buildSettingsUI() {
     
     pistons.forEach((p, i) => {
         let activeClass = i === editingPistonIndex ? "background: #f39c12; color: white; border-color: #f39c12;" : "";
-        pistonHtml += `<button class="nudge-btn" style="${activeClass}" onclick="editingPistonIndex=${i}; buildSettingsUI();">${p.name}</button>`;
+        pistonHtml += `<button class="nudge-btn" style="${activeClass}" onclick="switchPistonTab(${i})">${p.name}</button>`;
     });
     
     pistonHtml += `</div>
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; background: var(--stop-row-bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border-color);">
-            <input type="text" class="mapping-input" style="width: 200px; text-align: left; font-size: 1em;" value="${piston.name}" onchange="pistons[${editingPistonIndex}].name = this.value; buildSettingsUI(); buildEditorUI();" title="Rename Piston">
-            <label class="switch" title="Swell Shutters Open"><input type="checkbox" ${piston.swell >= 127 ? "checked" : ""} onchange="pistons[${editingPistonIndex}].swell = this.checked ? 127 : 64"><span class="slider-switch swell-bg"></span></label>
+            <input type="text" class="mapping-input" style="width: 200px; text-align: left; font-size: 1em;" value="${piston.name}" onchange="updatePistonName(${editingPistonIndex}, this.value)" title="Rename Piston">
+            <label class="switch" title="Swell Shutters Open"><input type="checkbox" ${piston.swell >= 127 ? "checked" : ""} onchange="updatePistonSwell(${editingPistonIndex}, this.checked)"><span class="slider-switch swell-bg"></span></label>
             <span style="font-size:0.9em; font-weight:bold; color:#8e44ad;">Swell Open</span>
         </div>
         
@@ -311,6 +311,22 @@ function buildTriStateBox(name, val, color, state) {
     </div>`;
 }
 
+// --- NEW HELPER FUNCTIONS FOR PISTON SETTINGS ---
+function switchPistonTab(index) {
+    editingPistonIndex = index;
+    buildSettingsUI();
+}
+
+function updatePistonName(index, newName) {
+    pistons[index].name = newName;
+    buildSettingsUI();
+    buildEditorUI();
+}
+
+function updatePistonSwell(index, isChecked) {
+    pistons[index].swell = isChecked ? 127 : 64;
+}
+
 function setTriState(cc, targetState) {
     let p = pistons[editingPistonIndex];
     p.activeStops = p.activeStops.filter(v => v !== cc);
@@ -325,6 +341,7 @@ function setTriState(cc, targetState) {
 function updateMapping(manualKey, index, type, newVal) {
     if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
     if (type === 'name') organStructure[manualKey][index].name = newVal;
+    buildSettingsUI(); // Ensure settings reflect the renamed rank
     buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
@@ -332,6 +349,7 @@ function updateMapping(manualKey, index, type, newVal) {
 function updateExpMapping(type, newVal) {
     if (type === 'swell') swellCC = parseInt(newVal);
     if (type === 'perc') percCC = parseInt(newVal);
+    buildSettingsUI();
     buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
@@ -536,4 +554,4 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState;
+window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.updatePistonSwell = updatePistonSwell;
