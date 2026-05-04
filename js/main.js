@@ -281,7 +281,7 @@ function getTodayString() {
 
 let songMetadata = {
     title: "Untitled Project",
-    arranger: "Nico",
+    arranger: "UNKNOWN",
     version: "1.0",
     created: "2026-05-04",
     modified: "2026-05-04",
