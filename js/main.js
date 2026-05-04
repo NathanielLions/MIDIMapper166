@@ -37,6 +37,7 @@ function togglePlay() {
         if (!currentMidi) return alert("Please import a MIDI file first!");
         isPlaying = true;
         document.getElementById('play-btn').innerText = "⏸ Pause";
+        
         let currentTick = parseInt(document.getElementById('tick-slider').value);
         startMidiSeconds = currentMidi.header.ticksToSeconds(currentTick);
         startTimeMs = performance.now();
@@ -63,18 +64,24 @@ function killAllNotes() {
 
 function scheduler() {
     if (!isPlaying || !currentMidi) return;
+    
     let now = performance.now();
     let elapsedSeconds = (now - startTimeMs) / 1000;
     let currentMidiSeconds = startMidiSeconds + elapsedSeconds;
+    
     let newTick = Math.round(currentMidi.header.secondsToTicks(currentMidiSeconds));
     let sliderMax = parseInt(document.getElementById('tick-slider').max);
+    
     if (newTick > sliderMax) { stopPlayback(); return; }
+    
     document.getElementById('tick-slider').value = newTick;
     document.getElementById('current-tick').innerText = newTick;
     syncSwitchesToTimeline(newTick);
     draw();
+    
     let lookaheadSeconds = 0.1; 
     let lookaheadMidiSeconds = currentMidiSeconds + lookaheadSeconds;
+    
     currentMidi.tracks.forEach(track => {
         if (hiddenChannels.has(track.channel)) return;
         track.notes.forEach(note => {
@@ -87,6 +94,7 @@ function scheduler() {
             }
         });
     });
+    
     requestAnimationFrame(scheduler);
 }
 
@@ -110,31 +118,46 @@ function getActiveStopsForChannel(channel) {
 function scheduleNotePlay(note, channel, delaySeconds) {
     let playTime = audioCtx.currentTime + delaySeconds;
     let activeStops = getActiveStopsForChannel(channel);
+    
     if (activeStops.length === 0) return; 
 
-    let attack = 0.02; let release = 0.02;
-    if (note.duration < 0.04) { attack = note.duration / 2; release = note.duration / 2; }
+    // Audio Safety Check for orchestrion short notes
+    let attack = 0.02;
+    let release = 0.02;
+    if (note.duration < 0.04) {
+        attack = note.duration / 2;
+        release = note.duration / 2;
+    }
     
     activeStops.forEach(stop => {
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
+        
+        // Instrument Texture Mapping
         if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
         else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
         else if ([40, 82, 68, 48, 50].includes(stop.val)) osc.type = 'sawtooth';
         else if ([56, 57, 71].includes(stop.val)) osc.type = 'square';
         else osc.type = 'square';
+        
         osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
+        
         let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
         let peakVolume = 0.08 * swellVal;
+        
         gain.gain.setValueAtTime(0, playTime);
         gain.gain.linearRampToValueAtTime(peakVolume, playTime + attack); 
         gain.gain.setValueAtTime(peakVolume, Math.max(playTime + attack, playTime + note.duration - release)); 
         gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
+        
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.start(playTime); osc.stop(playTime + note.duration);
+        
+        osc.start(playTime);
+        osc.stop(playTime + note.duration);
         activeOscillators.push(osc);
     });
+    
     setTimeout(() => { activeOscillators = activeOscillators.filter(o => o !== null); }, (note.duration + delaySeconds) * 1000 + 100);
 }
 
@@ -143,20 +166,51 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 // ==========================================
 let currentMidi = null;
 let fileName = "wurlitzer_output";
-let ppq = 384; let minMidiNote = 127; let maxMidiNote = 0;
+let ppq = 384; 
+let minMidiNote = 127;
+let maxMidiNote = 0;
 let isUpdatingSwitches = false; 
+
 let hiddenChannels = new Set();
 window.pistonsAffectPercussion = false;
-let swellCC = 11; let percCC = 10;
 
-const channelColors = ['#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e', '#ff9ff3', '#8e44ad', '#48dbfb', '#1dd1a1', '#f368e0', '#ff9f43', '#0abde3', '#10ac84'];
+let swellCC = 11;
+let percCC = 10;
+
+const channelColors = [
+    '#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e',
+    '#ff9ff3', '#8e44ad', '#48dbfb', '#1dd1a1', '#f368e0', '#ff9f43', '#0abde3', '#10ac84'
+];
+
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
 let organStructure = {
-    "Countermelody (Ch 2)": [ { val: 8, name: "Glockenspiel" }, { val: 10, name: "Unaphone" }, { val: 19, name: "Prestant" }, { val: 20, name: "Undamaris" }, { val: 71, name: "Clarinet" }, { val: 40, name: "Forte Violin" }, { val: 73, name: "Flute" }, { val: 75, name: "Flageolet" }, { val: 82, name: "Soft Violin" } ],
-    "Trumpetmelody (Ch 1)": [ { val: 68, name: "Viola Bassoon" }, { val: 56, name: "Wooden Trumpet" }, { val: 57, name: "Brass Trumpet" } ],
-    "Accompaniment (Ch 3)": [ { val: 70, name: "Open Flute" }, { val: 48, name: "Strings" }, { val: 11, name: "Stopped Flute" } ],
-    "Bass (Ch 4)": [ { val: 57, name: "Wooden Trombone" }, { val: 50, name: "Brass Trombone" }, { val: 58, name: "Bass Flute" } ]
+    "Countermelody (Ch 2)": [ 
+        { val: 8, name: "Glockenspiel" }, 
+        { val: 10, name: "Unaphone" }, 
+        { val: 19, name: "Prestant" }, 
+        { val: 20, name: "Undamaris" }, 
+        { val: 71, name: "Clarinet" }, 
+        { val: 40, name: "Forte Violin" }, 
+        { val: 73, name: "Flute" }, 
+        { val: 75, name: "Flageolet" }, 
+        { val: 82, name: "Soft Violin" } 
+    ],
+    "Trumpetmelody (Ch 1)": [ 
+        { val: 68, name: "Viola Bassoon" }, 
+        { val: 56, name: "Wooden Trumpet" }, 
+        { val: 57, name: "Brass Trumpet" } 
+    ],
+    "Accompaniment (Ch 3)": [ 
+        { val: 70, name: "Open Flute" }, 
+        { val: 48, name: "Strings" }, 
+        { val: 11, name: "Stopped Flute" } 
+    ],
+    "Bass (Ch 4)": [ 
+        { val: 57, name: "Wooden Trombone" }, 
+        { val: 50, name: "Brass Trombone" }, 
+        { val: 58, name: "Bass Flute" }
+    ]
 };
 
 let pistons = [
@@ -180,8 +234,126 @@ function toggleMidiVals(show) {
     else document.body.classList.add('hide-midi-vals');
 }
 
-function updateMapping(manualKey, index, newVal) {
-    organStructure[manualKey][index].val = parseInt(newVal);
+// ==========================================
+// DISCORD-STYLE SETTINGS ENGINE
+// ==========================================
+let activeSettingsTab = 'ranks';
+
+function buildSettingsUI() {
+    const container = document.getElementById('settings-mapping-container');
+    let html = `<div class="discord-settings-layout">
+        <div class="discord-sidebar">
+            <div class="discord-sidebar-header">Global Settings</div>
+            <div class="discord-sidebar-item ${activeSettingsTab === 'ranks' ? 'active' : ''}" onclick="openSettingsTab('ranks')">Organ Ranks & Names</div>
+            <div class="discord-sidebar-header">Pistons</div>`;
+    
+    pistons.forEach((p, i) => {
+        html += `<div class="discord-sidebar-item ${activeSettingsTab === 'piston-'+i ? 'active' : ''}" onclick="openSettingsTab('piston-${i}')">🔘 ${p.name}</div>`;
+    });
+    
+    html += `</div>
+        <div class="discord-main">
+            <div class="discord-content" id="settings-content-area"></div>
+        </div>
+    </div>`;
+    
+    container.innerHTML = html;
+    renderSettingsContent();
+}
+
+function openSettingsTab(tabId) {
+    activeSettingsTab = tabId;
+    buildSettingsUI(); 
+}
+
+function renderSettingsContent() {
+    const area = document.getElementById('settings-content-area');
+    
+    if (activeSettingsTab === 'ranks') {
+        let content = `<h3 style="border-bottom:none; margin-bottom: 20px;">Rank Dictionary & MIDI CCs</h3>
+        <div class="settings-grid">`;
+        
+        for (const [manual, stops] of Object.entries(organStructure)) {
+            content += `<div><h4 style="color: ${groupColors[manual.split(' ')[0]] || '#3498db'};">${manual.split(' ')[0]}</h4>`;
+            stops.forEach((s, i) => {
+                 content += `<div class="rank-input-group">
+                    <div style="display:flex; justify-content: space-between; align-items:center;">
+                        <span style="font-size:0.8em; color:#7f8c8d; font-weight:bold;">MIDI CC:</span>
+                        <input type="number" class="mapping-input" value="${s.val}" onchange="updateMapping('${manual}', ${i}, 'val', this.value)">
+                    </div>
+                    <input type="text" class="rank-input-name" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)" title="Rename this rank">
+                 </div>`;
+            });
+            content += `</div>`;
+        }
+        
+        // Expression CC Configuration
+        content += `<div><h4 style="color: #8e44ad;">Expression & Percussion</h4>
+            <div class="rank-input-group">
+                <div style="display:flex; justify-content: space-between; align-items:center;">
+                    <span style="font-size:0.8em; color:#7f8c8d; font-weight:bold;">Swell CC:</span>
+                    <input type="number" class="mapping-input" value="${swellCC}" onchange="updateExpMapping('swell', this.value)">
+                </div>
+            </div>
+            <div class="rank-input-group">
+                <div style="display:flex; justify-content: space-between; align-items:center;">
+                    <span style="font-size:0.8em; color:#7f8c8d; font-weight:bold;">Percussion CC:</span>
+                    <input type="number" class="mapping-input" value="${percCC}" onchange="updateExpMapping('perc', this.value)">
+                </div>
+            </div>
+        </div></div>`;
+        
+        area.innerHTML = content;
+        
+    } else if (activeSettingsTab.startsWith('piston-')) {
+        let pIndex = parseInt(activeSettingsTab.split('-')[1]);
+        let p = pistons[pIndex];
+        
+        let content = `
+        <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 20px;">
+            <h3 style="margin:0; border:none;">Piston Configuration</h3>
+            <input type="text" class="mapping-input" style="width:250px; font-size:1em; text-align:left; padding:8px;" value="${p.name}" onchange="pistons[${pIndex}].name = this.value; buildSettingsUI();" title="Rename Piston">
+        </div>
+        
+        <h4 style="margin-top:10px; border-bottom: 1px solid var(--border-color); padding-bottom:5px;">Active Stops for this Piston</h4>
+        <div class="settings-grid">`;
+
+        for (const [manual, stops] of Object.entries(organStructure)) {
+             content += `<div><h4 style="color: ${groupColors[manual.split(' ')[0]] || '#3498db'};">${manual.split(' ')[0]}</h4>`;
+             stops.forEach(s => {
+                 let isChecked = p.activeStops.includes(s.val) ? "checked" : "";
+                 content += `<div class="settings-row" style="padding: 6px 10px;">
+                    <span style="font-size: 0.85em;">${s.name}</span>
+                    <label class="switch">
+                        <input type="checkbox" ${isChecked} onchange="togglePistonStop(${pIndex}, ${s.val}, this.checked)">
+                        <span class="slider-switch piston-switch-bg"></span>
+                    </label>
+                 </div>`;
+             });
+             content += `</div>`;
+        }
+        
+        content += `<div><h4 style="color: #8e44ad;">Expression Settings</h4>
+             <div class="settings-row" style="padding: 6px 10px;">
+                <span style="font-size: 0.85em;">Swell Shutters Open</span>
+                <label class="switch">
+                    <input type="checkbox" ${p.swell >= 127 ? "checked" : ""} onchange="pistons[${pIndex}].swell = this.checked ? 127 : 64">
+                    <span class="slider-switch swell-bg"></span>
+                </label>
+             </div>
+        </div></div>`;
+
+        area.innerHTML = content + `</div>
+        <div class="discord-save-bar">
+            <span style="font-size: 0.9em;">Careful — you have unsaved changes! Configure your stops above.</span>
+            <button class="discord-save-btn" onclick="commitPistonChanges()">Commit Changes</button>
+        </div>`;
+    }
+}
+
+function updateMapping(manualKey, index, type, newVal) {
+    if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
+    if (type === 'name') organStructure[manualKey][index].name = newVal;
     buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
@@ -193,38 +365,18 @@ function updateExpMapping(type, newVal) {
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 }
 
-function saveCurrentStateToPiston(index) {
-    pistons[index].name = document.getElementById('piston-name-' + index).value;
-    let active = [];
-    Object.values(organStructure).flat().forEach(s => { let cb = document.getElementById(`stop-${s.val}`); if (cb && cb.checked) active.push(s.val); });
-    let percCb = document.getElementById(`stop-${percCC}`); if (percCb && percCb.checked) active.push(percCC);
-    let swCb = document.getElementById('swell-switch');
-    pistons[index].swell = (swCb && swCb.checked) ? 127 : 64;
-    pistons[index].activeStops = active;
-    buildSettingsUI(); buildEditorUI();
-    alert(`Saved current organ state to ${pistons[index].name}!`);
+function togglePistonStop(pIndex, stopVal, isChecked) {
+     let p = pistons[pIndex];
+     if (isChecked) {
+         if (!p.activeStops.includes(stopVal)) p.activeStops.push(stopVal);
+     } else {
+         p.activeStops = p.activeStops.filter(v => v !== stopVal);
+     }
 }
 
-function buildSettingsUI() {
-    const container = document.getElementById('settings-mapping-container');
-    container.innerHTML = '';
-    let gridHTML = `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">`;
-    for (const [manual, stops] of Object.entries(organStructure)) {
-        let color = groupColors[manual.split(' ')[0]] || "#3498db";
-        gridHTML += `<div><h4 style="color: ${color}; margin-bottom: 5px; font-size:0.9em;">${manual.split(' ')[0]}</h4>`;
-        stops.forEach((s, i) => {
-            gridHTML += `<div class="settings-row" style="padding: 5px 10px; margin-bottom: 5px;"><span style="font-weight: normal; font-size: 0.85em;">${s.name}</span><input type="number" class="mapping-input" value="${s.val}" onchange="updateMapping('${manual}', ${i}, this.value)"></div>`;
-        });
-        gridHTML += `</div>`;
-    }
-    gridHTML += `<div><h4 style="color: #8e44ad; margin-bottom: 5px; font-size:0.9em;">Expression & Percussion</h4><div class="settings-row" style="padding: 5px 10px; margin-bottom: 5px;"><span style="font-weight: normal; font-size: 0.85em;">Swell CC</span><input type="number" class="mapping-input" value="${swellCC}" onchange="updateExpMapping('swell', this.value)"></div><div class="settings-row" style="padding: 5px 10px; margin-bottom: 5px;"><span style="font-weight: normal; font-size: 0.85em;">Percussion CC</span><input type="number" class="mapping-input" value="${percCC}" onchange="updateExpMapping('perc', this.value)"></div></div></div>`;
-    container.innerHTML = gridHTML;
-
-    let pistonHTML = `<h4 style="color: #f39c12; margin-top: 30px; border-top: 1px solid var(--border-color); padding-top: 15px; margin-bottom:15px;">Piston Configurations</h4><div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 10px;">`;
-    pistons.forEach((p, i) => {
-        pistonHTML += `<div class="settings-row" style="padding: 8px 15px;"><input type="text" id="piston-name-${i}" class="piston-input" value="${p.name}" onchange="pistons[${i}].name = this.value"><button class="piston-save-btn" onclick="saveCurrentStateToPiston(${i})">Update</button><div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 0.7em; color: #7f8c8d;">Test</span><label class="switch"><input type="checkbox" onchange="if(this.checked) { applyRegistrationState(pistons[${i}].activeStops, pistons[${i}].swell); setTimeout(()=>this.checked=false, 500); }"><span class="slider-switch piston-switch-bg"></span></label></div></div>`;
-    });
-    container.innerHTML += pistonHTML + `</div>`;
+function commitPistonChanges() {
+    buildEditorUI(); 
+    alert("✅ Piston Changes Committed! Check the Dashboard.");
 }
 
 function buildEditorUI() {
@@ -410,4 +562,8 @@ function draw() {
 
 function exportMidi() { if (!currentMidi) return; const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click(); }
 
-window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.saveCurrentStateToPiston = saveCurrentStateToPiston; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
+// ==========================================
+// 3. WINDOW BINDINGS FOR HTML INTERACTION
+// ==========================================
+window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
+window.openSettingsTab = openSettingsTab; window.togglePistonStop = togglePistonStop; window.commitPistonChanges = commitPistonChanges;
