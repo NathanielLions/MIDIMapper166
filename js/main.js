@@ -1252,7 +1252,6 @@ window.exportMidi = function() {
     // 1. Instantiate a completely pure, empty MIDI file
     const cleanExport = new Midi();
     cleanExport.header.name = (songMetadata.title || "W166_Export").replace(/[^a-z0-9\s]/gi, '').trim();
-    // (PPQ assignment removed to prevent read-only getter crash)
 
     // 2. Loop through live tracks and safely clone data, skipping empty tracks
     currentMidi.tracks.forEach(oldTrack => {
@@ -1304,20 +1303,6 @@ window.exportMidi = function() {
     }
 };
 
-    // 3. Export binary
-    try {
-        const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
-        const a = document.createElement("a"); 
-        a.href = URL.createObjectURL(blob); 
-        
-        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = safeName + "_mapped.mid"; 
-        a.click(); 
-    } catch (e) {
-        alert("Export Encoding Error: " + e.message);
-    }
-};
-
 // Start Up
 fetchSoundfont(); 
 createImportModal();
@@ -1330,3 +1315,4 @@ buildEditorUI();
 window.togglePlay = togglePlay;
 window.stopPlayback = stopPlayback;
 window.hardReset = hardReset;
+window.openTab = openTab;
