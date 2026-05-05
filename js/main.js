@@ -728,7 +728,6 @@ window.handleImportChoice = function(choice) {
 
     if (choice === 'clear') {
         if (sysTrack) {
-            // Safely remove the sysTrack without completely recreating the array
             for (let i = currentMidi.tracks.length - 1; i >= 0; i--) {
                 if (currentMidi.tracks[i] === sysTrack) {
                     currentMidi.tracks.splice(i, 1);
@@ -959,7 +958,6 @@ window.applyRoutingAndStart = function() {
         if(select) channelMap[ch] = select.value;
     });
 
-    // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
     const targetMap = {
         "1": { ch: 0, name: "Percussion", gm: 115 }, 
         "2": { ch: 1, name: "Accompaniment", gm: 4 }, 
@@ -985,7 +983,6 @@ window.applyRoutingAndStart = function() {
         }
     });
 
-    // Splice array safely instead of overwriting reference
     for (let i = currentMidi.tracks.length - 1; i >= 0; i--) {
         if (tracksToRemove.includes(currentMidi.tracks[i])) currentMidi.tracks.splice(i, 1);
     }
@@ -996,7 +993,6 @@ window.applyRoutingAndStart = function() {
 function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
     
-    // EXTRACT METADATA IF EXISTS
     let sysTrack = getSystemTrack();
     if (sysTrack && sysTrack.name && sysTrack.name.startsWith("W166_META:")) {
         try {
@@ -1100,7 +1096,6 @@ window.applyRegistrationState = function(pistonIndex) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    // Safely delete surrounding events using splice (Prevents memory reference break)
     [swellCC, 80, 81].forEach(cc => { 
         if (track.controlChanges[cc]) {
             let arr = track.controlChanges[cc];
@@ -1114,10 +1109,9 @@ window.applyRegistrationState = function(pistonIndex) {
     
     let currentOffset = 0; 
     
-    // Use official Tone.js addCC object instantiation
     if (p.swellState !== 0) {
         let swellVal = p.swellState === 1 ? 127 : 64;
-        track.addCC({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+        track.addCC({ number: swellCC, value: swellVal / 127, ticks: baseTick + currentOffset });
         currentOffset++;
     }
     
@@ -1129,7 +1123,7 @@ window.applyRegistrationState = function(pistonIndex) {
         else if (p.offStops.includes(val)) targetCC = 80;
         
         if (targetCC !== null) {
-            track.addCC({ ticks: baseTick + currentOffset, number: targetCC, value: val / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+            track.addCC({ number: targetCC, value: val / 127, ticks: baseTick + currentOffset });
             currentOffset++;
         }
     });
@@ -1146,7 +1140,6 @@ function addEvent(cc, val, label, manual) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    // Splice conflict deletion
     [swellCC, 80, 81].forEach(checkCc => { 
         if (track.controlChanges[checkCc]) {
             let arr = track.controlChanges[checkCc];
@@ -1161,8 +1154,7 @@ function addEvent(cc, val, label, manual) {
     let safeTick = baseTick; 
     while (track.controlChanges[cc] && track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
     
-    // Official addCC instantiation
-    track.addCC({ ticks: safeTick, number: cc, value: val / 127, time: currentMidi.header.ticksToSeconds(safeTick) });
+    track.addCC({ number: cc, value: val / 127, ticks: safeTick });
     renderLog(); draw(); 
 }
 
@@ -1249,7 +1241,7 @@ function draw() {
 }
 
 // ==========================================
-// 11. EXPORT & INIT
+// 11. COMPLETELY REBUILT EXPORT ENGINE
 // ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
@@ -1257,23 +1249,50 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    let sysTrack = getOrCreateSystemTrack();
-    
-    // SANITIZE ENCODING: Strips non-ASCII characters to prevent fatal byte-length VLQ mismatches
-    let safeJsonString = JSON.stringify(songMetadata).replace(/[^\x20-\x7E]/g, '');
-    sysTrack.name = "W166_META:" + safeJsonString;
-    
-    let safeHeaderString = (songMetadata.title || "Export").replace(/[^\x20-\x7E]/g, '');
-    currentMidi.header.name = safeHeaderString;
-    currentMidi.name = safeHeaderString;
-    
-    // Strip manual channel overwriting to prevent class corruption
-    currentMidi.tracks.forEach(t => {
-        t.channel = parseInt(t.channel) || 0; 
+    // 1. Instantiate a completely pure, empty MIDI file
+    const cleanExport = new Midi();
+    cleanExport.header.name = (songMetadata.title || "W166_Export").replace(/[^a-z0-9\s]/gi, '').trim();
+    cleanExport.header.ppq = currentMidi.header.ppq || 384;
+
+    // 2. Loop through live tracks and safely clone data, skipping empty tracks
+    currentMidi.tracks.forEach(oldTrack => {
+        const hasNotes = oldTrack.notes.length > 0;
+        const hasCCs = [swellCC, 80, 81].some(cc => oldTrack.controlChanges[cc] && oldTrack.controlChanges[cc].length > 0);
+        
+        if (!hasNotes && !hasCCs) return;
+
+        const newTrack = cleanExport.addTrack();
+        newTrack.channel = parseInt(oldTrack.channel) || 0;
+        
+        if (oldTrack.name && !oldTrack.name.startsWith("W166_META")) {
+            newTrack.name = oldTrack.name.substring(0, 32); 
+        }
+
+        // Clone Notes
+        oldTrack.notes.forEach(n => {
+            newTrack.addNote({
+                midi: n.midi,
+                ticks: n.ticks,
+                durationTicks: n.durationTicks,
+                velocity: n.velocity
+            });
+        });
+
+        // Clone Control Changes
+        for (let ccNum in oldTrack.controlChanges) {
+            oldTrack.controlChanges[ccNum].forEach(cc => {
+                newTrack.addCC({
+                    number: cc.number,
+                    ticks: cc.ticks,
+                    value: cc.value
+                });
+            });
+        }
     });
 
+    // 3. Export binary
     try {
-        const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+        const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
         const a = document.createElement("a"); 
         a.href = URL.createObjectURL(blob); 
         
