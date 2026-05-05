@@ -1248,3 +1248,6 @@ buildMetadataUI();
 loadPreferences();
 buildSettingsUI();
 buildEditorUI();
+// Bind transport controls to the global window so HTML buttons can click them
+window.togglePlay = togglePlay;
+window.stopPlayback = stopPlayback;
