@@ -281,10 +281,10 @@ function getTodayString() {
 
 let songMetadata = {
     title: "Untitled Project",
-    arranger: "UNKNOWN",
+    arranger: "",
     version: "1.0",
-    created: "2026-05-04",
-    modified: "2026-05-04",
+    created: getTodayString(),
+    modified: getTodayString(),
     copyright: "https://nathaniellions.github.io/MIDIMapper166/"
 };
 
@@ -676,6 +676,12 @@ window.onload = () => {
     fetchSoundfont(); 
     createImportModal();
     buildMetadataUI();
+};
+
+window.hardReset = function() {
+    if(confirm("Are you sure? This will clear all current mapping work and return to the upload screen.")) {
+        location.reload();
+    }
 };
 
 document.getElementById('midi-upload').addEventListener('change', async (e) => {
