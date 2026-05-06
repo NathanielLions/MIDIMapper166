@@ -1241,58 +1241,39 @@ function draw() {
 }
 
 // ==========================================
-// 11. EXPORT & INIT (TRUE ORIGINAL + SORT)
+// 11. EXPORT & INIT
 // ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
     
-    // FINAL METADATA INJECTION (From your original script)
+    // FINAL METADATA INJECTION
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
     let sysTrack = getOrCreateSystemTrack();
     sysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
+    currentMidi.header.name = songMetadata.title;
+    currentMidi.name = songMetadata.title;
     
-    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
-    currentMidi.header.name = safeName.substring(0, 32);
-    currentMidi.name = safeName.substring(0, 32);
-    
-    const blockedCCs = [1, 7, 10, 91, 121]; 
-
     currentMidi.tracks.forEach(t => {
-        t.channel = parseInt(t.channel) || 0;
-
-        // Trash DAW junk
-        blockedCCs.forEach(cc => {
-            if (t.controlChanges[cc]) {
-                delete t.controlChanges[cc];
-            }
-        });
-
-        // THE CRITICAL FIX: Sort chronologically so delta-time never goes negative
+        // THE CRITICAL FIX: Sort chronologically to prevent DAW time errors
         t.notes.sort((a, b) => a.ticks - b.ticks);
         for (let ccNum in t.controlChanges) {
             t.controlChanges[ccNum].sort((a, b) => a.ticks - b.ticks);
         }
 
-        // YOUR ORIGINAL CHANNEL SYNC (From your original Javascript.txt)
         t.notes.forEach(n => n.channel = t.channel);
-        if (Object.keys(t.controlChanges).length > 0) {
-            Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
-        }
+        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
     });
 
-    try {
-        const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
-        const a = document.createElement("a"); 
-        a.href = URL.createObjectURL(blob); 
-        
-        let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = safeFilename + "_mapped.mid"; 
-        a.click(); 
-    } catch (e) {
-        alert("Export Encoding Error: " + e.message);
-    }
+    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+    const a = document.createElement("a"); 
+    a.href = URL.createObjectURL(blob); 
+    
+    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
+    let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    a.download = safeFilename + "_mapped.mid"; 
+    a.click(); 
 };
 
 // Start Up
