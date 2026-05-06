@@ -212,7 +212,7 @@ window.nudgeSeconds = function(amountSec) {
 };
 
 // ==========================================
-// 2. CORE EDITOR LOGIC & STATE (WITH DEFAULTS)
+// 2. CORE EDITOR LOGIC & STATE
 // ==========================================
 let currentMidi = null;
 let fileName = "wurlitzer_output";
@@ -230,22 +230,21 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-// DEFAULT FACTORY SETTINGS
 const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 12;
 
 const DEFAULT_ORGAN_STRUCTURE = {
-    "Countermelody (Ch 2)": [ 
-        { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
-        { val: 20, name: "Undamaris", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
-        { val: 73, name: "Flute", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true } 
+    "Accompaniment (Ch 2)": [ 
+        { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
     ],
-    "Trumpetmelody (Ch 1)": [ 
+    "Trumpetmelody (Ch 3)": [ 
         { val: 68, name: "Viola Bassoon", visible: true }, { val: 56, name: "Wooden Trumpet", visible: true }, { val: 61, name: "Brass Trumpet", visible: true },
         { val: 42, name: "Cello", visible: true } 
     ],
-    "Accompaniment (Ch 3)": [ 
-        { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
+    "Countermelody (Ch 4)": [ 
+        { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
+        { val: 20, name: "Undamaris", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
+        { val: 73, name: "Flute", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true } 
     ],
     "Bass (Ch 4)": [ 
         { val: 57, name: "Wooden Trombone", visible: true }, { val: 50, name: "Brass Trombone", visible: true }, { val: 58, name: "Bass Flute", visible: true }
@@ -253,16 +252,15 @@ const DEFAULT_ORGAN_STRUCTURE = {
 };
 
 const DEFAULT_PISTONS = [
-    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58], swell: 64 }, 
-    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
-    { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58], swell: 127 }, 
-    { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58], swell: 127 },
-    { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, 
-    { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
+    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58, 12], swell: 64 }, 
+    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
+    { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58, 12], swell: 127 }, 
+    { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58, 12], swell: 127 },
+    { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 }, 
+    { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
-// LIVE STATE VARIABLES
 let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
@@ -315,9 +313,6 @@ function toggleMidiVals(show) {
     else document.body.classList.add('hide-midi-vals');
 }
 
-// ==========================================
-// SYSTEM TRACK FINGERPRINTING HELPERS
-// ==========================================
 function getSystemTrack() {
     if (!currentMidi) return null;
     return currentMidi.tracks.find(t => 
@@ -336,9 +331,6 @@ function getOrCreateSystemTrack() {
     return trk;
 }
 
-// ==========================================
-// DYNAMIC RANK ADD/REMOVE LOGIC
-// ==========================================
 window.addRank = function(manualKey) {
     let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
     let newVal = 21; 
@@ -359,9 +351,6 @@ window.deleteRank = function(manualKey, index) {
     }
 };
 
-// ==========================================
-// NEW VISIBILITY & UI ENGINE (SETTINGS)
-// ==========================================
 function buildSettingsUI() {
     const container = document.getElementById('settings-mapping-container');
     container.innerHTML = '';
@@ -522,7 +511,7 @@ function buildEditorUI() {
     }
 
     const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
-    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
+    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion Master <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion Master', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
     document.getElementById('col-bass-exp').appendChild(expDiv);
 
     let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
@@ -543,7 +532,7 @@ window.openTab = function(tabId, btnElement) {
 };
 
 // ==========================================
-// 3. IMPORT INTERCEPTOR & MODAL LOGIC
+// 3. IMPORT INTERCEPTOR & ROUTING ENGINE
 // ==========================================
 function getUnknownStops(track) {
     if (!track) return [];
@@ -657,7 +646,7 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     if (systemTrack) {
         document.getElementById('import-modal').style.display = 'flex';
     } else {
-        finalizeImport(); 
+        buildRoutingUI(); 
     }
 });
 
@@ -669,18 +658,17 @@ window.handleImportChoice = function(choice) {
         if (sysTrack) {
             currentMidi.tracks = currentMidi.tracks.filter(t => t !== sysTrack);
         }
-        finalizeImport();
+        buildRoutingUI();
     } else {
         let unknowns = getUnknownStops(sysTrack);
         if (unknowns.length > 0) {
             showRemapModal(unknowns);
         } else {
-            finalizeImport();
+            buildRoutingUI();
         }
     }
 };
 
-// BULK ACTION PROCESSING
 window.processRemap = function(unknowns) {
     let sysTrack = getSystemTrack();
     let oldToNewCCs = {};
@@ -689,7 +677,7 @@ window.processRemap = function(unknowns) {
         let act = document.getElementById(`action-${val}`).value;
 
         if (act === 'ignore') {
-            return; // Do nothing, just leave it in the track unmapped
+            return; 
         } 
         else if (act === 'delete') {
             if (sysTrack) {
@@ -709,7 +697,7 @@ window.processRemap = function(unknowns) {
             }
             if (existingStop) {
                 existingStop.val = val;
-                oldToNewCCs[oldCC] = val; // Track for piston updating
+                oldToNewCCs[oldCC] = val; 
             }
         } 
         else if (act === 'add') {
@@ -721,7 +709,6 @@ window.processRemap = function(unknowns) {
 
     updateGlobalStopList();
 
-    // Specific logic for CC swapping
     pistons.forEach(p => {
         for (let oldCC in oldToNewCCs) {
             let oldInt = parseInt(oldCC);
@@ -741,12 +728,12 @@ window.processRemap = function(unknowns) {
     document.getElementById('remap-modal').style.display = 'none';
     buildSettingsUI();
     buildEditorUI();
-    finalizeImport();
+    buildRoutingUI();
 };
 
 window.ignoreAllRemap = function() {
     document.getElementById('remap-modal').style.display = 'none';
-    finalizeImport();
+    buildRoutingUI();
 };
 
 window.deleteAllRemap = function(unknowns) {
@@ -761,6 +748,96 @@ window.deleteAllRemap = function(unknowns) {
         });
     }
     document.getElementById('remap-modal').style.display = 'none';
+    buildRoutingUI();
+};
+
+// ==========================================
+// 4. NEW: PRE-EDITOR ROUTING ENGINE
+// ==========================================
+window.buildRoutingUI = function() {
+    let activeChannels = new Set();
+    let channelNames = {};
+    
+    currentMidi.tracks.forEach(t => {
+        if (t.notes.length > 0 && t.channel !== 15) {
+            activeChannels.add(t.channel);
+            if (!channelNames[t.channel] && t.name) channelNames[t.channel] = t.name;
+        }
+    });
+
+    let routingHtml = '';
+    Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
+        let chNameExt = channelNames[ch] ? ` (${channelNames[ch]})` : '';
+        let color = channelColors[ch % 16];
+        
+        let sel1 = ch === 0 ? 'selected' : '';
+        let sel2 = ch === 1 ? 'selected' : '';
+        let sel3 = ch === 2 ? 'selected' : '';
+        let sel4c = ch === 3 ? 'selected' : '';
+        let sel4b = ch === 4 ? 'selected' : '';
+        
+        routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+            <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
+            <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
+                <option value="1" ${sel1}>Percussion (Out Ch 1)</option>
+                <option value="2" ${sel2}>Accompaniment (Out Ch 2)</option>
+                <option value="3" ${sel3}>Trumpetmelody (Out Ch 3)</option>
+                <option value="4-counter" ${sel4c}>Countermelody (Out Ch 4)</option>
+                <option value="4-bass" ${sel4b}>Bass (Out Ch 4)</option>
+                <option value="ignore">🗑️ Ignore / Mute Track</option>
+            </select>
+        </div>`;
+    });
+
+    document.getElementById('routing-list').innerHTML = routingHtml;
+    document.getElementById('upload-panel').style.display = 'none';
+    document.getElementById('routing-panel').style.display = 'block';
+};
+
+window.applyRoutingAndStart = function() {
+    let activeChannels = new Set();
+    currentMidi.tracks.forEach(t => {
+        if (t.notes.length > 0 && t.channel !== 15) activeChannels.add(t.channel);
+    });
+
+    let channelMap = {};
+    Array.from(activeChannels).forEach(ch => {
+        let select = document.getElementById(`route-ch-${ch}`);
+        if(select) channelMap[ch] = select.value;
+    });
+
+    // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
+    const targetMap = {
+        "1": { ch: 0, name: "Percussion", gm: 115 }, // 115 = Woodblock / Trap Drums
+        "2": { ch: 1, name: "Accompaniment", gm: 4 }, // 4 = Electric Piano 1
+        "3": { ch: 2, name: "Trumpetmelody", gm: 56 }, // 56 = Trumpet
+        "4-counter": { ch: 3, name: "Countermelody", gm: 0 }, // 0 = Acoustic Grand Piano
+        "4-bass": { ch: 3, name: "Bass", gm: 32 } // 32 = Acoustic Bass
+    };
+
+    let tracksToRemove = [];
+    currentMidi.tracks.forEach(t => {
+        if (t.channel !== 15 && channelMap[t.channel] !== undefined) {
+            let mapped = channelMap[t.channel];
+            if (mapped === 'ignore') {
+                tracksToRemove.push(t);
+            } else if (targetMap[mapped]) {
+                let dest = targetMap[mapped];
+                
+                // Update Track Logic
+                t.channel = dest.ch;
+                t.name = dest.name;
+                
+                // Inject General MIDI descriptives
+                if (!t.instrument) t.instrument = {};
+                t.instrument.number = dest.gm; 
+                t.instrument.name = dest.name;
+            }
+        }
+    });
+
+    currentMidi.tracks = currentMidi.tracks.filter(t => !tracksToRemove.includes(t));
+    
     finalizeImport();
 };
 
@@ -770,6 +847,7 @@ function finalizeImport() {
         if (t.notes.length > 0) activeChannels.add(t.channel);
         t.notes.forEach(n => { if(n.ticks + n.durationTicks > maxTicks) maxTicks = n.ticks + n.durationTicks; if(n.midi < minMidiNote) minMidiNote = n.midi; if(n.midi > maxMidiNote) maxMidiNote = n.midi; });
     });
+    
     const filtersDiv = document.getElementById('channel-filters');
     filtersDiv.innerHTML = '<strong style="display:flex; align-items:center; margin-right:10px; font-size:0.9em;">Tracks:</strong>';
     Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
@@ -777,6 +855,7 @@ function finalizeImport() {
         btn.onclick = () => { if (hiddenChannels.has(ch)) { hiddenChannels.delete(ch); btn.classList.remove('inactive'); } else { hiddenChannels.add(ch); btn.classList.add('inactive'); } draw(); };
         filtersDiv.appendChild(btn);
     });
+    
     const slider = document.getElementById('tick-slider'); slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
     document.getElementById('zoom-slider').disabled = false; 
     
@@ -821,7 +900,7 @@ function renderLog() {
         else {
             let foundName = "Unknown";
             for (const [man, stops] of Object.entries(organStructure)) { let stop = stops.find(s => s.val === e.val); if (stop) { foundName = stop.name; manual = man.split(' ')[0]; break; } }
-            if (e.val === percCC) { foundName = "Percussion"; manual = "Perc"; }
+            if (e.val === percCC) { foundName = "Percussion Master"; manual = "Perc"; }
             if (e.cc === 81) { label = foundName + " ON"; labelColor = "#27ae60"; } else { label = foundName + " OFF"; labelColor = "#e74c3c"; }
         }
         
@@ -935,10 +1014,24 @@ function draw() {
     ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo((currentTick - st) * scaleX, 0); ctx.lineTo((currentTick - st) * scaleX, rect.height); ctx.stroke();
 }
 
-window.exportMidi = function() { if (!currentMidi) return; const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click(); };
+window.exportMidi = function() { 
+    if (!currentMidi) return; 
+    
+    // Safety sync: Ensure Tone.js binds the notes to the newly updated track channels before compiling
+    currentMidi.tracks.forEach(t => {
+        t.notes.forEach(n => n.channel = t.channel);
+        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
+    });
+
+    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+    const a = document.createElement("a"); 
+    a.href = URL.createObjectURL(blob); 
+    a.download = fileName + "_W166.mid"; 
+    a.click(); 
+};
 
 // ==========================================
-// 3. WINDOW BINDINGS FOR HTML INTERACTION
+// 5. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.togglePlay = togglePlay;
 window.stopPlayback = stopPlayback;
