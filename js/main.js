@@ -1249,11 +1249,11 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    // 1. Instantiate a completely pure, empty MIDI file
     const cleanExport = new Midi();
+    
+    // Completely bypass JSON string generation to prevent W166_META corruption
     cleanExport.header.name = (songMetadata.title || "W166_Export").replace(/[^a-z0-9\s]/gi, '').trim();
 
-    // 2. Loop through live tracks and safely clone data, skipping empty tracks
     currentMidi.tracks.forEach(oldTrack => {
         const hasNotes = oldTrack.notes.length > 0;
         const hasCCs = [swellCC, 80, 81].some(cc => oldTrack.controlChanges[cc] && oldTrack.controlChanges[cc].length > 0);
@@ -1263,11 +1263,11 @@ window.exportMidi = function() {
         const newTrack = cleanExport.addTrack();
         newTrack.channel = parseInt(oldTrack.channel) || 0;
         
+        // Final guard against the old META track naming bug
         if (oldTrack.name && !oldTrack.name.startsWith("W166_META")) {
             newTrack.name = oldTrack.name.substring(0, 32); 
         }
 
-        // Clone Notes using absolute time (seconds) to bypass PPQ math
         oldTrack.notes.forEach(n => {
             newTrack.addNote({
                 midi: n.midi,
@@ -1277,8 +1277,13 @@ window.exportMidi = function() {
             });
         });
 
-        // Clone Control Changes using absolute time (seconds)
+        // 🛑 THE BLOCK LIST: This stops the script from copying those junk 
+        // DAW setup commands (Modulation, Volume, Pan, Reverb, Reset) that confuse the organ.
+        const blockedCCs = [1, 7, 10, 91, 121]; 
+
         for (let ccNum in oldTrack.controlChanges) {
+            if (blockedCCs.includes(parseInt(ccNum))) continue; // Trash the junk!
+            
             oldTrack.controlChanges[ccNum].forEach(cc => {
                 newTrack.addCC({
                     number: cc.number,
@@ -1289,7 +1294,6 @@ window.exportMidi = function() {
         }
     });
 
-    // 3. Export binary
     try {
         const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
         const a = document.createElement("a"); 
