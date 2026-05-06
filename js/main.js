@@ -1249,12 +1249,10 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    // 1. Clean Metadata to prevent JSON buffer overflows
     let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
     currentMidi.header.name = safeName.substring(0, 32);
     currentMidi.name = safeName.substring(0, 32);
 
-    // 2. The Blocklist: Remove the DAW junk
     const blockedCCs = [1, 7, 10, 91, 121]; 
 
     currentMidi.tracks.forEach(track => {
@@ -1264,16 +1262,12 @@ window.exportMidi = function() {
             track.name = safeName.substring(0, 32);
         }
 
-        // Trash the blocked CC arrays completely
         blockedCCs.forEach(cc => {
             if (track.controlChanges[cc]) {
                 delete track.controlChanges[cc];
             }
         });
 
-        // 3. THE CRITICAL TIMING FIX
-        // Sort all events chronologically by ticks. This guarantees that 
-        // the delta-time calculation never goes negative.
         track.notes.sort((a, b) => a.ticks - b.ticks);
         
         for (let ccNum in track.controlChanges) {
@@ -1281,7 +1275,6 @@ window.exportMidi = function() {
         }
     });
 
-    // 4. Export Binary
     try {
         const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
         const a = document.createElement("a"); 
@@ -1289,35 +1282,6 @@ window.exportMidi = function() {
         
         let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         a.download = safeFilename + "_mapped.mid"; 
-        a.click(); 
-    } catch (e) {
-        alert("Export Encoding Error: " + e.message);
-    }
-};
-        // 🛑 THE BLOCK LIST: This stops the script from copying those junk 
-        // DAW setup commands (Modulation, Volume, Pan, Reverb, Reset) that confuse the organ.
-        const blockedCCs = [1, 7, 10, 91, 121]; 
-
-        for (let ccNum in oldTrack.controlChanges) {
-            if (blockedCCs.includes(parseInt(ccNum))) continue; // Trash the junk!
-            
-            oldTrack.controlChanges[ccNum].forEach(cc => {
-                newTrack.addCC({
-                    number: cc.number,
-                    time: cc.time,
-                    value: cc.value
-                });
-            });
-        }
-    });
-
-    try {
-        const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
-        const a = document.createElement("a"); 
-        a.href = URL.createObjectURL(blob); 
-        
-        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = safeName + "_mapped.mid"; 
         a.click(); 
     } catch (e) {
         alert("Export Encoding Error: " + e.message);
