@@ -202,25 +202,26 @@ let organStructure = {
 
 // 3-State Piston System
 let pistons = [
-    { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
-    { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57, 61, 42], swell: 127 },
-    { name: "Piston Default 1", activeStops: [19, 40, 10, 70, 48, 70, 11, 68, 57, 61, 58, 50], swell: 127 }, 
-    { name: "Piston Default 2", activeStops: [8, 19, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
-    { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 61, 70, 11, 48, 56, 68, 42], swell: 127 }, 
-    { name: "Piston Default 4", activeStops: [], swell: 64 },
+    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 58], swell: 64 }, // Softest foundations
+    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, // Full organ
+    { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58], swell: 127 }, 
+    { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58], swell: 127 },
+    { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, 
+    { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
-let allPossibleStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
-pistons.forEach(p => {
-    if (!p.offStops) {
-        p.offStops = [];
-        allPossibleStops.forEach(cc => { if (!p.activeStops.includes(cc)) p.offStops.push(cc); });
-    }
-    if (p.swellState === undefined) {
-        p.swellState = p.swell >= 127 ? 1 : -1;
-    }
-});
+function updateGlobalStopList() {
+    let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
+    pistons.forEach(p => {
+        if (!p.offStops) p.offStops = [];
+        newAllStops.forEach(cc => { if (!p.activeStops.includes(cc) && !p.offStops.includes(cc)) p.offStops.push(cc); });
+        p.activeStops = p.activeStops.filter(cc => newAllStops.includes(cc));
+        p.offStops = p.offStops.filter(cc => newAllStops.includes(cc));
+        if (p.swellState === undefined) p.swellState = p.swell >= 127 ? 1 : -1;
+    });
+}
+updateGlobalStopList();
 
 let editingPistonIndex = 0;
 
@@ -236,6 +237,50 @@ function toggleMidiVals(show) {
 }
 
 // ==========================================
+// SYSTEM TRACK FINGERPRINTING HELPERS
+// ==========================================
+function getSystemTrack() {
+    if (!currentMidi) return null;
+    return currentMidi.tracks.find(t => 
+        t.channel === 15 || 
+        (t.controlChanges[80] && t.controlChanges[80].length > 0) || 
+        (t.controlChanges[81] && t.controlChanges[81].length > 0)
+    );
+}
+
+function getOrCreateSystemTrack() {
+    let trk = getSystemTrack();
+    if (!trk) {
+        trk = currentMidi.addTrack();
+        trk.channel = 15;
+    }
+    return trk;
+}
+
+// ==========================================
+// DYNAMIC RANK ADD/REMOVE LOGIC
+// ==========================================
+function addRank(manualKey) {
+    let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
+    let newVal = 21; 
+    while (usedCCs.includes(newVal) && newVal < 120) { newVal++; }
+    
+    organStructure[manualKey].push({ val: newVal, name: "New Stop", visible: true });
+    updateGlobalStopList();
+    buildSettingsUI();
+    buildEditorUI();
+}
+
+function deleteRank(manualKey, index) {
+    if (confirm(`Are you sure you want to delete ${organStructure[manualKey][index].name}?`)) {
+        organStructure[manualKey].splice(index, 1);
+        updateGlobalStopList();
+        buildSettingsUI();
+        buildEditorUI();
+    }
+}
+
+// ==========================================
 // NEW VISIBILITY & UI ENGINE (SETTINGS)
 // ==========================================
 function buildSettingsUI() {
@@ -247,7 +292,7 @@ function buildSettingsUI() {
     
     for (const [manual, stops] of Object.entries(organStructure)) {
         let color = groupColors[manual.split(' ')[0]] || "#3498db";
-        globalHtml += `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:5px;">
+        globalHtml += `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:10px;">
             <h4 style="margin: 5px 0; color: ${color}; font-size: 0.85em;">${manual.split(' ')[0]}</h4>`;
         
         stops.forEach((s, i) => {
@@ -256,16 +301,19 @@ function buildSettingsUI() {
             let textDecor = isVis ? "none" : "line-through";
             let rowOp = isVis ? "1" : "0.6";
 
-            globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px; opacity: ${rowOp};">
+            globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 5px; opacity: ${rowOp};">
+                <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:0.6; padding:0; margin-right: 5px; transition: 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#e74c3c';" onmouseout="this.style.opacity='0.6'; this.style.color='inherit';" onclick="deleteRank('${manual}', ${i})" title="Delete Stop">🗑️</button>
                 <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:${eyeOp}; padding:0;" onclick="toggleRankVisibility('${manual}', ${i})" title="Toggle Visibility">👁️</button>
                 <input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${s.val}" onchange="updateMapping('${manual}', ${i}, 'val', this.value)" title="MIDI CC">
-                <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor};" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
+                <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor}; width: 120px;" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
             </div>`;
         });
+        
+        globalHtml += `<button class="nudge-btn" style="width:100%; margin-top:5px; font-size:0.8em; padding: 5px; background: rgba(52, 152, 219, 0.1); border: 1px dashed ${color}; color: ${color};" onclick="addRank('${manual}')">➕ Add Stop</button>`;
         globalHtml += `</div>`;
     }
     
-    globalHtml += `<div style="border-left: 3px solid #8e44ad; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:5px;">
+    globalHtml += `<div style="border-left: 3px solid #8e44ad; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:10px;">
         <h4 style="margin: 5px 0; color: #8e44ad; font-size: 0.85em;">Expression</h4>
         <div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${swellCC}" onchange="updateExpMapping('swell', this.value)"><span style="font-size:0.8em;">Swell</span></div>
         <div style="display:flex; align-items:center; gap: 5px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${percCC}" onchange="updateExpMapping('perc', this.value)"><span style="font-size:0.8em;">Percussion</span></div>
@@ -402,9 +450,32 @@ function buildEditorUI() {
     document.getElementById('col-pistons').innerHTML = pistonsHtml;
 }
 
+function openTab(tabId, btnElement) {
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    if(btnElement) btnElement.classList.add('active');
+    if (tabId === 'page-editor' && currentMidi) setTimeout(() => draw(), 10);
+}
+
 // ==========================================
 // 3. IMPORT INTERCEPTOR & MODAL LOGIC
 // ==========================================
+function getUnknownStops(track) {
+    if (!track) return [];
+    let knownVals = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
+    let foundVals = new Set();
+    [80, 81].forEach(cc => {
+        if (track.controlChanges[cc]) {
+            track.controlChanges[cc].forEach(e => {
+                let val = Math.round(e.value * 127);
+                if (!knownVals.includes(val)) foundVals.add(val);
+            });
+        }
+    });
+    return Array.from(foundVals);
+}
+
 function createImportModal() {
     if(document.getElementById('import-modal')) return;
     const modal = document.createElement('div');
@@ -413,7 +484,7 @@ function createImportModal() {
     modal.innerHTML = `
         <div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:400px; text-align:center; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
             <h3 style="margin-top:0; color:#f39c12; font-size:1.4em;">Organ Data Detected</h3>
-            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Wurlitzer registration data on Track 15. How would you like to proceed?</p>
+            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Wurlitzer registration data. How would you like to proceed?</p>
             <div style="display:flex; flex-direction:column; gap:12px;">
                 <button class="nudge-btn" style="background:#3498db; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('modify')">Modify Existing Mappings</button>
                 <button class="nudge-btn" style="background:#e74c3c; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('clear')">Start Over (Clear Mappings)</button>
@@ -421,6 +492,70 @@ function createImportModal() {
         </div>
     `;
     document.body.appendChild(modal);
+}
+
+window.toggleRemapRow = function(val) {
+    let act = document.getElementById(`action-${val}`).value;
+    document.getElementById(`target-${val}`).style.display = act === 'replace' ? 'block' : 'none';
+    document.getElementById(`name-${val}`).style.display = act === 'add' ? 'block' : 'none';
+    document.getElementById(`manual-${val}`).style.display = act === 'add' ? 'block' : 'none';
+};
+
+function showRemapModal(unknowns) {
+    if(!document.getElementById('remap-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'remap-modal';
+        modal.style.cssText = "display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(3px);";
+        document.body.appendChild(modal);
+    }
+    const modal = document.getElementById('remap-modal');
+    
+    let manualOptions = Object.keys(organStructure).map(k => `<option value="${k}">${k.split(' ')[0]}</option>`).join('');
+    
+    let stopOptions = '';
+    for (const [man, stops] of Object.entries(organStructure)) {
+        let shortMan = man.split(' ')[0];
+        stops.forEach(s => {
+            stopOptions += `<option value="${s.val}">${s.name} (${shortMan})</option>`;
+        });
+    }
+
+    let html = `<div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:650px; width: 100%; text-align:left; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 85vh; overflow-y: auto;">
+        <h3 style="margin-top:0; color:#e74c3c; font-size:1.4em; text-align:center;">Unknown Stops Detected</h3>
+        <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4; text-align:center;">Choose how you want to handle these unrecognized CC signals.</p>
+        <div id="remap-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom: 25px;">`;
+
+    unknowns.forEach(val => {
+        html += `<div style="display:flex; gap: 8px; align-items:center; background: var(--stop-row-bg); padding: 12px; border-radius: 5px; border: 1px solid var(--border-color); flex-wrap: wrap;">
+            <span style="font-weight:bold; color:#f1c40f; width: 60px; font-size: 1.1em;">CC ${val}</span>
+            
+            <select id="action-${val}" class="mapping-input" style="flex: 1; min-width: 130px; cursor:pointer;" onchange="toggleRemapRow(${val})">
+                <option value="ignore" selected>Ignore (Keep in File)</option>
+                <option value="replace">Replace Existing Stop</option>
+                <option value="add">Add as New Stop</option>
+                <option value="delete">Delete from MIDI</option>
+            </select>
+
+            <select id="target-${val}" class="mapping-input" style="flex: 2; display:none; cursor:pointer;">
+                ${stopOptions}
+            </select>
+
+            <input type="text" id="name-${val}" class="mapping-input" placeholder="New Stop Name" style="flex: 1.5; display:none;">
+            <select id="manual-${val}" class="mapping-input" style="flex: 1; display:none; cursor:pointer;">
+                ${manualOptions}
+            </select>
+        </div>`;
+    });
+
+    html += `</div>
+        <div style="display:flex; justify-content:center; gap: 10px; flex-wrap: wrap;">
+            <button class="nudge-btn" style="background:#95a5a6; color:white; border:none; padding:10px 15px; font-size:0.9em;" onclick="ignoreAllRemap()">Ignore All</button>
+            <button class="nudge-btn" style="background:#c0392b; color:white; border:none; padding:10px 15px; font-size:0.9em;" onclick="deleteAllRemap([${unknowns.join(',')}])">Delete All Unknowns</button>
+            <button class="nudge-btn" style="background:#2ecc71; color:white; border:none; padding:10px 20px; font-size:1em; font-weight:bold;" onclick="processRemap([${unknowns.join(',')}])">Process Mappings</button>
+        </div>
+    </div>`;
+    modal.innerHTML = html;
+    modal.style.display = 'flex';
 }
 
 window.onload = () => { 
@@ -433,15 +568,9 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
     currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
     
-    // Detection Logic: Does Track 15 exist and contain CC 4, 80, or 81?
-    let systemTrack = currentMidi.tracks.find(t => t.channel === 15);
-    let hasOrganData = false;
+    let systemTrack = getSystemTrack();
     
     if (systemTrack) {
-        hasOrganData = [swellCC, 80, 81].some(cc => systemTrack.controlChanges[cc] && systemTrack.controlChanges[cc].length > 0);
-    }
-    
-    if (hasOrganData) {
         document.getElementById('import-modal').style.display = 'flex';
     } else {
         finalizeImport(); 
@@ -450,13 +579,106 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
 
 function handleImportChoice(choice) {
     document.getElementById('import-modal').style.display = 'none';
+    let sysTrack = getSystemTrack();
+
     if (choice === 'clear') {
-        // Destroy the System Track entirely before loading
-        currentMidi.tracks = currentMidi.tracks.filter(t => t.channel !== 15);
+        if (sysTrack) {
+            currentMidi.tracks = currentMidi.tracks.filter(t => t !== sysTrack);
+        }
+        finalizeImport();
+    } else {
+        let unknowns = getUnknownStops(sysTrack);
+        if (unknowns.length > 0) {
+            showRemapModal(unknowns);
+        } else {
+            finalizeImport();
+        }
     }
-    // If 'modify', we do nothing and let it load normally.
-    finalizeImport();
 }
+
+// BULK ACTION PROCESSING
+window.processRemap = function(unknowns) {
+    let sysTrack = getSystemTrack();
+    let oldToNewCCs = {};
+
+    unknowns.forEach(val => {
+        let act = document.getElementById(`action-${val}`).value;
+
+        if (act === 'ignore') {
+            return; // Do nothing, just leave it in the track unmapped
+        } 
+        else if (act === 'delete') {
+            if (sysTrack) {
+                [80, 81].forEach(cc => {
+                    if(sysTrack.controlChanges[cc]) {
+                        sysTrack.controlChanges[cc] = sysTrack.controlChanges[cc].filter(e => Math.round(e.value * 127) !== val);
+                    }
+                });
+            }
+        } 
+        else if (act === 'replace') {
+            let oldCC = parseInt(document.getElementById(`target-${val}`).value);
+            let existingStop = null;
+            for (const [man, stops] of Object.entries(organStructure)) {
+                let found = stops.find(s => s.val === oldCC);
+                if (found) { existingStop = found; break; }
+            }
+            if (existingStop) {
+                existingStop.val = val;
+                oldToNewCCs[oldCC] = val; // Track for piston updating
+            }
+        } 
+        else if (act === 'add') {
+            let name = document.getElementById(`name-${val}`).value.trim() || `Recovered CC ${val}`;
+            let manualKey = document.getElementById(`manual-${val}`).value;
+            organStructure[manualKey].push({ val: val, name: name, visible: true });
+        }
+    });
+
+    updateGlobalStopList();
+
+    // Specific logic for CC swapping
+    pistons.forEach(p => {
+        for (let oldCC in oldToNewCCs) {
+            let oldInt = parseInt(oldCC);
+            let newInt = oldToNewCCs[oldCC];
+
+            if (p.activeStops.includes(oldInt)) {
+                p.activeStops = p.activeStops.filter(c => c !== oldInt);
+                p.activeStops.push(newInt);
+            }
+            if (p.offStops.includes(oldInt)) {
+                p.offStops = p.offStops.filter(c => c !== oldInt);
+                p.offStops.push(newInt);
+            }
+        }
+    });
+
+    document.getElementById('remap-modal').style.display = 'none';
+    buildSettingsUI();
+    buildEditorUI();
+    finalizeImport();
+};
+
+window.ignoreAllRemap = function() {
+    document.getElementById('remap-modal').style.display = 'none';
+    finalizeImport();
+};
+
+window.deleteAllRemap = function(unknowns) {
+    let sysTrack = getSystemTrack();
+    if (sysTrack) {
+        unknowns.forEach(val => {
+            [80, 81].forEach(cc => {
+                if(sysTrack.controlChanges[cc]) {
+                    sysTrack.controlChanges[cc] = sysTrack.controlChanges[cc].filter(e => Math.round(e.value * 127) !== val);
+                }
+            });
+        });
+    }
+    document.getElementById('remap-modal').style.display = 'none';
+    finalizeImport();
+};
 
 function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
@@ -502,7 +724,7 @@ function handleStopToggle(val, name, manual, isChecked) { if (isUpdatingSwitches
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); tbody.innerHTML = '';
-    if (!currentMidi) return; let track = currentMidi.tracks.find(t => t.channel === 15); if (!track) return;
+    if (!currentMidi) return; let track = getSystemTrack(); if (!track) return;
     let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
     events.sort((a, b) => b.ticks - a.ticks);
     events.forEach(e => {
@@ -522,8 +744,7 @@ function applyRegistrationState(pistonIndex) {
     if (!currentMidi) return alert("Please load a MIDI file first!");
     let p = pistons[pistonIndex];
     let baseTick = parseInt(document.getElementById('tick-slider').value);
-    let track = currentMidi.tracks.find(t => t.channel === 15) || currentMidi.addTrack();
-    track.channel = 15;
+    let track = getOrCreateSystemTrack();
     
     [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => { if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true; return Math.abs(e.ticks - baseTick) > 40; }); });
     let currentOffset = 0; 
@@ -560,8 +781,8 @@ function applyRegistrationState(pistonIndex) {
 function addEvent(cc, val, label, manual) {
     if (!currentMidi) return;
     let baseTick = parseInt(document.getElementById('tick-slider').value);
-    let track = currentMidi.tracks.find(t => t.channel === 15) || currentMidi.addTrack();
-    track.channel = 15;
+    let track = getOrCreateSystemTrack();
+    
     [swellCC, 80, 81].forEach(checkCc => { if (track.controlChanges[checkCc]) track.controlChanges[checkCc] = track.controlChanges[checkCc].filter(e => !( ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val)) && Math.abs(e.ticks - baseTick) <= 10)); });
     if (!track.controlChanges[cc]) track.controlChanges[cc] = [];
     let safeTick = baseTick; while (track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
@@ -570,7 +791,7 @@ function addEvent(cc, val, label, manual) {
 }
 
 function removeEvent(cc, val, tick) {
-    let track = currentMidi.tracks.find(t => t.channel === 15);
+    let track = getSystemTrack();
     if (track && track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => !(e.ticks === tick && Math.round(e.value * 127) === val));
     renderLog(); syncSwitchesToTimeline(parseInt(document.getElementById('tick-slider').value)); draw();
 }
@@ -578,7 +799,7 @@ function removeEvent(cc, val, tick) {
 function syncSwitchesToTimeline(currentTick) {
     if (!currentMidi) return;
     isUpdatingSwitches = true; 
-    let track = currentMidi.tracks.find(t => t.channel === 15);
+    let track = getSystemTrack();
     let stopStates = {}; let swellState = false; 
     if (track) {
         let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
@@ -611,7 +832,7 @@ function draw() {
         if (hiddenChannels.has(t.channel)) return; ctx.fillStyle = channelColors[t.channel % 16];
         t.notes.forEach(n => { if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); });
     });
-    let trk = currentMidi.tracks.find(t => t.channel === 15);
+    let trk = getSystemTrack();
     if (trk) {
         [swellCC, 80, 81].forEach(cc => { if (trk.controlChanges[cc]) trk.controlChanges[cc].forEach(e => { if (e.ticks >= st && e.ticks <= st + windowTicks) { ctx.fillStyle = cc === swellCC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === swellCC ? 16 : 0, 4, 12); } }); });
     }
@@ -623,6 +844,7 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // ==========================================
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
-window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
+window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons; window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
+window.toggleRemapRow = toggleRemapRow; window.processRemap = processRemap; window.ignoreAllRemap = ignoreAllRemap; window.deleteAllRemap = deleteAllRemap; window.addRank = addRank; window.deleteRank = deleteRank;
+
 buildSettingsUI(); buildEditorUI();
