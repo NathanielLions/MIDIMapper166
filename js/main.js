@@ -1108,7 +1108,6 @@ window.applyRegistrationState = function(pistonIndex) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    // STRICT EXACT MATCH DELETION (NO MORE FUZZY +-40)
     [SWELL_CC, 80, 81].forEach(cc => { 
         if (track.controlChanges[cc]) {
             let arr = track.controlChanges[cc];
@@ -1125,7 +1124,7 @@ window.applyRegistrationState = function(pistonIndex) {
     if (p.swellState !== 0) {
         let swellVal = p.swellState === 1 ? 127 : 64;
         track.addCC({ number: SWELL_CC, value: swellVal, ticks: baseTick + currentOffset });
-        currentOffset++; // GUARANTEED +1 TICK SEPARATION
+        currentOffset++; 
     }
     
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
@@ -1139,7 +1138,7 @@ window.applyRegistrationState = function(pistonIndex) {
             let rawInt = Math.round(val);
             if (rawInt < 0) rawInt = 0; if (rawInt > 127) rawInt = 127;
             track.addCC({ number: targetCC, value: rawInt, ticks: baseTick + currentOffset });
-            currentOffset++; // GUARANTEED +1 TICK SEPARATION
+            currentOffset++; 
         }
     });
     
@@ -1158,7 +1157,6 @@ function addEvent(cc, val, label, manual) {
     let rawVal = Math.round(val);
     if (rawVal < 0) rawVal = 0; if (rawVal > 127) rawVal = 127;
 
-    // EXACT TICK DUPLICATE PURGE (NO MORE FUZZY +-10)
     [SWELL_CC, 80, 81].forEach(checkCc => { 
         if (track.controlChanges[checkCc]) {
             let arr = track.controlChanges[checkCc];
@@ -1172,7 +1170,6 @@ function addEvent(cc, val, label, manual) {
         }
     });
 
-    // FIND NEXT AVAILABLE CLEAN TICK
     let safeTick = baseTick; 
     while (track.controlChanges[cc] && track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
     
@@ -1185,7 +1182,6 @@ window.removeEvent = function(cc, val, tick) {
     if (track && track.controlChanges[cc]) {
         let arr = track.controlChanges[cc];
         for (let i = arr.length - 1; i >= 0; i--) {
-            // EXACT INT AND TICK MATCH ONLY
             if (arr[i].ticks === tick && Math.round(arr[i].value) === val) {
                 arr.splice(i, 1);
             }
@@ -1279,7 +1275,7 @@ window.exportMidi = function() {
 
     let sysTrack = getOrCreateSystemTrack();
     sysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
-    sysTrack.channel = 15; // FORCE CHANNEL 16
+    sysTrack.channel = 15; 
     
     let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
     currentMidi.header.name = safeName.substring(0, 32);
@@ -1291,14 +1287,11 @@ window.exportMidi = function() {
     currentMidi.tracks.forEach(t => {
         t.channel = parseInt(t.channel) || 0;
 
-        // Trash all non-essential DAW metadata CCs
         [1, 7, 10, 91, 121].forEach(cc => { if (t.controlChanges[cc]) delete t.controlChanges[cc]; });
 
         if (t === sysTrack || t.channel === 15) {
-            // RULE 5: System track MUST NOT contain notes
             t.notes = []; 
             
-            // Collect all system events
             [SWELL_CC, 80, 81].forEach(ccNum => {
                 if (t.controlChanges[ccNum]) {
                     t.controlChanges[ccNum].forEach(e => {
@@ -1309,17 +1302,14 @@ window.exportMidi = function() {
                     });
                 }
             });
-            // Wipe them from the track object (we will cleanly rebuild them in Pass 3)
             t.controlChanges[SWELL_CC] = [];
             t.controlChanges[80] = [];
             t.controlChanges[81] = [];
         } else {
-            // RULE 5: Note tracks MUST NOT contain system events
             if (t.controlChanges[SWELL_CC]) delete t.controlChanges[SWELL_CC];
             if (t.controlChanges[80]) delete t.controlChanges[80];
             if (t.controlChanges[81]) delete t.controlChanges[81];
 
-            // RULE 3A: Sort all notes to prevent negative delta-times
             t.notes.sort((a, b) => a.ticks - b.ticks);
             t.notes.forEach(n => n.channel = t.channel);
             
@@ -1330,57 +1320,92 @@ window.exportMidi = function() {
         }
     });
 
-    // PASS 2: DETERMINISTIC PIPELINE (SORT, DEDUP, RESOLVE)
+    // PASS 2: DETERMINISTIC PIPELINE (SORT, DEDUP, HARDENED SPACING)
     allSystemEvents.sort((a, b) => a.ticks - b.ticks);
     
-    let cleanSystemEvents = [];
-    
+    let dedupedEvents = [];
     for (let i = 0; i < allSystemEvents.length; i++) {
-        let e = allSystemEvents[i];
+        let e = { ...allSystemEvents[i] }; 
         let isDuplicate = false;
 
-        for (let j = cleanSystemEvents.length - 1; j >= 0; j--) {
-            let prev = cleanSystemEvents[j];
-            
-            if (prev.ticks < e.ticks) break; // Optimization, already sorted
-
-            if (prev.ticks === e.ticks) {
-                // RULE 3B: Exact duplicate CC + Value -> Drop it
-                if (prev.cc === e.cc && prev.val === e.val) {
-                    isDuplicate = true;
-                    break;
-                }
-                
-                // RULE 3B & 6: Same tick + ON/OFF for same stop -> Push forward 1 tick
-                if ((prev.cc === 80 || prev.cc === 81) && (e.cc === 80 || e.cc === 81) && prev.cc !== e.cc && prev.val === e.val) {
-                    e.ticks += 1;
-                }
-                
-                // RULE 3B & 6: Same tick + Same CC + Different value (e.g. Swell flip) -> Push forward 1 tick
-                if (prev.cc === e.cc && prev.val !== e.val) {
-                    e.ticks += 1;
-                }
+        if (dedupedEvents.length > 0) {
+            let prev = dedupedEvents[dedupedEvents.length - 1];
+            if (prev.ticks === e.ticks && prev.cc === e.cc && prev.val === e.val) {
+                isDuplicate = true;
             }
         }
-
+        
         if (!isDuplicate) {
-            cleanSystemEvents.push(e);
-            // Re-sort required because conflict resolution modifies tick time
-            cleanSystemEvents.sort((a, b) => a.ticks - b.ticks);
+            dedupedEvents.push(e);
         }
     }
+
+    let cleanSystemEvents = [];
+    let lastTickUsed = -1;
+
+    dedupedEvents.forEach(e => {
+        let spacedEvent = { ...e };
+        if (spacedEvent.ticks <= lastTickUsed) {
+            spacedEvent.ticks = lastTickUsed + 1;
+        }
+        lastTickUsed = spacedEvent.ticks;
+        cleanSystemEvents.push(spacedEvent);
+    });
+
+    cleanSystemEvents.sort((a, b) => a.ticks - b.ticks);
 
     // PASS 3: REBUILD SINGLE SOURCE OF TRUTH
     cleanSystemEvents.forEach(e => {
         sysTrack.addCC({ number: e.cc, value: e.val, ticks: e.ticks });
     });
     
-    // Ensure channel mapping is absolute
     Object.values(sysTrack.controlChanges).flat().forEach(cc => cc.channel = 15);
 
-    // PASS 4: PRE-FLIGHT VALIDATION CHECK (RULE 7)
+    // PASS 4: PRE-FLIGHT VALIDATION CHECK
     let isExportValid = true;
     let validationLog = [];
+
+    let sysEventsForValidation = [];
+    if (sysTrack) {
+        for (let ccNum in sysTrack.controlChanges) {
+            sysTrack.controlChanges[ccNum].forEach(cc => {
+                sysEventsForValidation.push({ cc: parseInt(ccNum), val: cc.value, ticks: cc.ticks });
+            });
+        }
+        sysEventsForValidation.sort((a, b) => a.ticks - b.ticks);
+    }
+
+    let lastCC = null;
+    let lastVal = -1;
+    let lastTick = -1;
+
+    sysEventsForValidation.forEach(cc => {
+        if (cc.ticks < lastTick) {
+            isExportValid = false;
+            validationLog.push(`System Track has backwards time jumps.`);
+        }
+
+        if (cc.val < 0 || cc.val > 127 || !Number.isInteger(cc.val)) {
+            isExportValid = false;
+            validationLog.push(`System Track value out of bounds or float: ${cc.val}`);
+        }
+
+        if (cc.ticks === lastTick) {
+            if ((cc.cc === 80 || cc.cc === 81) && (lastCC === 80 || lastCC === 81) && cc.val === lastVal) {
+                isExportValid = false;
+                validationLog.push(`ON/OFF conflict at tick ${cc.ticks} for stop ${cc.val}`);
+            }
+
+            if (cc.cc === SWELL_CC && lastCC === SWELL_CC && cc.val !== lastVal) {
+                isExportValid = false;
+                validationLog.push(`Multiple swell states at same tick ${cc.ticks}`);
+            }
+        }
+
+        lastTick = cc.ticks;
+        lastCC = cc.cc;
+        lastVal = cc.val;
+    });
 
     currentMidi.tracks.forEach(t => {
         let hasSystemData = (t.controlChanges[SWELL_CC] && t.controlChanges[SWELL_CC].length > 0) || 
@@ -1391,43 +1416,23 @@ window.exportMidi = function() {
             isExportValid = false;
             validationLog.push(`Track ${t.channel + 1} contains illegal System CCs.`);
         }
-        
-        for (let ccNum in t.controlChanges) {
-            let lastTick = -1;
-            let lastVal = -1;
-            t.controlChanges[ccNum].forEach(cc => {
-                if (cc.ticks < lastTick) {
-                    isExportValid = false;
-                    validationLog.push(`Track ${t.channel + 1} CC ${ccNum} has backwards time jumps.`);
-                }
-                
-                let checkVal = cc.value; 
-                if (checkVal < 0 || checkVal > 127) {
-                    isExportValid = false;
-                    validationLog.push(`Track ${t.channel + 1} CC ${ccNum} value out of bounds: ${checkVal}`);
-                }
-                
-                // Conflict check for strictly sorted system events
-                if (t === sysTrack && cc.ticks === lastTick) {
-                    if (ccNum == 80 || ccNum == 81 || ccNum == SWELL_CC) {
-                        // In CC context, duplicate values are caught. Cross-CC checks (ON/OFF) handled in array
-                        if (checkVal === lastVal) {
-                            isExportValid = false;
-                            validationLog.push(`System Track contains same-tick conflicts at Tick ${cc.ticks}.`);
-                        }
+
+        if (t !== sysTrack) {
+            for (let ccNum in t.controlChanges) {
+                t.controlChanges[ccNum].forEach(cc => {
+                    if (cc.value < 0 || cc.value > 127 || !Number.isInteger(cc.value)) {
+                        isExportValid = false;
+                        validationLog.push(`Track ${t.channel + 1} CC ${ccNum} value out of bounds or float: ${cc.value}`);
                     }
-                }
-                
-                lastTick = cc.ticks;
-                lastVal = checkVal;
-            });
+                });
+            }
         }
     });
 
     if (!isExportValid) {
         alert("CRITICAL ERROR: Export rejected due to validation failure.\n\n" + validationLog.join("\n"));
         console.error("MIDI Verification Failed:", validationLog);
-        return; // Abort export
+        return; 
     }
 
     try {
