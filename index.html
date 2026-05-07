@@ -6,145 +6,133 @@
     <title>W166 MIDI Mapper</title>
     
     <script src="https://unpkg.com/@tonejs/midi"></script>
-    <script src="https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js"></script>
     
-    <script src="https://surikov.github.io/webaudiofontdata/sound/0000_JCLive_sf2_file.js"></script>
-
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
+<body class="hide-midi-vals">
 
     <h1>Wurlitzer 166 Studio</h1>
 
     <div class="tabs-nav">
         <button class="tab-btn active" id="tab-import" onclick="openTab('page-import', this)">1. Import & Routing</button>
-        <button class="tab-btn" id="tab-editor" onclick="openTab('page-editor', this)">2. Editor / Player</button>
+        <button class="tab-btn" id="tab-editor" onclick="openTab('page-editor', this)">2. Editor</button>
+        <button class="tab-btn" id="tab-export" onclick="openTab('page-export', this)">3. History & Export</button>
+        <button class="tab-btn" id="tab-settings" onclick="openTab('page-settings', this)">4. Settings</button>
     </div>
 
     <div id="page-import" class="tab-content active">
-        <div class="panel upload-panel">
+        <div id="upload-panel" class="panel" style="text-align: center; padding: 40px 20px;">
             <h3>Select a MIDI File to Begin</h3>
-            <p>Load your standard MIDI file to start mapping Wurlitzer stops.</p>
-            <input type="file" id="midi-upload" accept=".mid,.midi">
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Load your standard MIDI file to start mapping Wurlitzer stops.</p>
+            <input type="file" id="midi-upload" accept=".mid,.midi" style="font-size: 1.1em; padding: 10px; border: 2px dashed #3498db; border-radius: 8px; background: var(--manual-bg); color: var(--text-color); cursor: pointer;">
+        </div>
+
+        <div id="routing-panel" class="panel" style="display: none;">
+            <h3>Track Routing & Channel Setup</h3>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Assign your imported MIDI channels to the correct Wurlitzer manuals. This ensures the exported file has the correct channel structure (Ch 1-4) and descriptive DAW instruments (e.g. Electric Piano, Trumpet).</p>
+            
+            <div id="routing-list" style="display: flex; flex-direction: column; gap: 8px;">
+                </div>
+
+            <button class="nudge-btn" onclick="applyRoutingAndStart()" style="background: #2ecc71; color: white; width: 100%; margin-top: 25px; font-size: 1.1em; padding: 12px; font-weight: bold; border: none;">Confirm Routing & Open Editor</button>
         </div>
     </div>
 
-    <div id="page-editor" class="tab-content" style="display: none;">
+    <div id="page-editor" class="tab-content">
         
         <div class="transport-bar">
-            <button class="btn play-btn" id="play-btn">▶ Play</button>
-            <button class="btn stop-btn" id="stop-btn">■ Stop</button>
-            <span id="audio-status">🔊 Awaiting MIDI...</span>
+            <button class="nudge-btn" id="play-btn" onclick="togglePlay()" style="background: #2ecc71; color: white; width: 120px; font-size: 1.1em; padding: 8px; border:none;">▶ Play</button>
+            <button class="nudge-btn" onclick="stopPlayback()" style="background: #e74c3c; color: white; width: 120px; font-size: 1.1em; padding: 8px; border:none;">■ Stop</button>
+            <span id="audio-status" style="font-size: 0.9em; color: var(--text-color); margin-left: 10px; font-weight: bold;">🔊 Initializing Audio Engine...</span>
         </div>
 
-        <div class="panel">
+        <div class="panel" style="border: 2px solid #3498db;">
+            <canvas id="piano-roll"></canvas>
+            
+            <div class="slider-wrapper">
+                <input type="range" id="tick-slider" min="0" value="0" disabled>
+            </div>
+
+            <div id="channel-filters"></div>
+            
+            <div class="controls-row">
+                <div class="nudge-group">
+                    <button class="nudge-btn" onclick="nudgeSeconds(-1)">-1 Sec</button>
+                    <button class="nudge-btn" onclick="nudgeBeats(-1)">-1 Beat</button>
+                    <button class="nudge-btn" onclick="nudgeTicks(-10)">-10 Ticks</button>
+                    <span style="font-size: 1.2em; font-weight: bold; min-width: 140px; text-align: center; color: #3498db;"><span id="time-label">Tick</span>: <span id="current-tick">0</span></span>
+                    <button class="nudge-btn" onclick="nudgeTicks(10)">+10 Ticks</button>
+                    <button class="nudge-btn" onclick="nudgeBeats(1)">+1 Beat</button>
+                    <button class="nudge-btn" onclick="nudgeSeconds(1)">+1 Sec</button>
+                </div>
+                
+                <div class="zoom-group">
+                    <strong>Zoom:</strong>
+                    <input type="range" id="zoom-slider" class="zoom-slider" min="1" max="100" value="1" disabled>
+                    <span id="zoom-level">1x</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="background: var(--bg-color);">
             <h3>Organ Registration Dashboard</h3>
             <div class="registration-flex">
-                
-                <div class="division-col" id="col-ch1">
-                    <h4>1 Trumpet Melody (Ch 1)</h4>
-                    <div class="stop-list">
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="56" checked> 56 Wooden Trumpet</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0" title="Pitch Offset">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="68" checked> 68 Baritone</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="61" checked> 61 Brass Trumpet</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="42" checked> 42 Cello</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="division-col" id="col-ch2">
-                    <h4>2 Countermelody (Ch 2)</h4>
-                    <div class="stop-list">
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="71" checked> 71 Clarinet</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="40" checked> 40 Loud Violin</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="82" checked> 82 Soft Violin</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="75" checked> 75 Flageolet</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="73" checked> 73 Flute</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="19" checked> 19 Prestant</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="20" checked> 20 Undamaris</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="8" checked> 8 Bells</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="10" checked> 10 Unaphone</label>
-                            <input type="number" class="mapping-input pitch-offset" value="-12">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="division-col" id="col-ch3">
-                    <h4>3 Accompaniment (Ch 3)</h4>
-                    <div class="stop-list">
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="70" checked> 70 Open Flute</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="11" checked> 11 Stopped Flute</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="48" checked> 48 Strings</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="division-col" id="col-ch4">
-                    <h4>4 Bass (Ch 4)</h4>
-                    <div class="stop-list">
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="58" checked> 58 Bass Flute</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="57" checked> 57 Bass Trombone</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                        <div class="stop-row">
-                            <label><input type="checkbox" class="stop-toggle" data-preset="50" checked> 50 Tuba</label>
-                            <input type="number" class="mapping-input pitch-offset" value="0">
-                        </div>
-                    </div>
-                </div>
-
+                <div id="col-countermelody" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
+                <div id="col-accomp-trumpet" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
+                <div id="col-bass-exp" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
+                <div id="col-pistons" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
             </div>
         </div>
     </div>
 
-    <script src="main.js"></script>
+    <div id="page-export" class="tab-content">
+        <div class="panel">
+            <button class="export-btn" id="export-btn" onclick="exportMidi()">Download Ready MIDI</button>
+            
+            <h3>Event History Log</h3>
+            <div class="log-container">
+                <table>
+                    <thead><tr><th id="log-time-header">Tick</th><th>Div</th><th>Action</th><th>Undo</th></tr></thead>
+                    <tbody id="log-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-settings" class="tab-content">
+        <div class="panel">
+            <h3>Workflow Settings</h3>
+            <div class="settings-row" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                <span style="font-weight: bold; color: #f1c40f;">Timeline Display Format</span>
+                <select id="time-format-select" onchange="updateTimeFormat(this.value)" class="mapping-input" style="width: 200px; cursor: pointer; font-size: 1em;">
+                    <option value="ticks" selected>Ticks</option>
+                    <option value="time">Time (MM:SS)</option>
+                    <option value="measures">Measures (Bar:Beat)</option>
+                </select>
+            </div>
+            <div class="settings-row">
+                <span>Enable Dark Mode</span>
+                <label class="switch">
+                    <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode(this.checked)">
+                    <span class="slider-switch swell-bg"></span>
+                </label>
+            </div>
+            <div class="settings-row">
+                <span>Show MIDI Numbers (e.g., Ch 2, 66)</span>
+                <label class="switch">
+                    <input type="checkbox" id="show-midi-toggle" onchange="toggleMidiVals(this.checked)">
+                    <span class="slider-switch swell-bg"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Custom CC Mapping & Pistons</h3>
+            <div id="settings-mapping-container"></div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+
 </body>
 </html>
