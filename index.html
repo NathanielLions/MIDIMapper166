@@ -126,6 +126,23 @@
             </div>
         </div>
 
+<div class="panel">
+            <h3>Organ Profile Management</h3>
+            <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 15px;">
+                Export your current stops, wave types, and pistons to a JSON file, or load a different mechanical organ layout.
+            </p>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="exportOrganProfile()" class="del-btn" style="background: #3498db; padding: 8px 15px; font-size: 1em;">
+                    📥 Export Organ JSON
+                </button>
+                
+                <label for="organ-upload" class="del-btn" style="background: #2ecc71; padding: 8px 15px; font-size: 1em; cursor: pointer;">
+                    📂 Import Organ JSON
+                </label>
+                <input type="file" id="organ-upload" accept=".json" onchange="importOrganProfile(event)" style="display: none;">
+            </div>
+        </div>
+
         <div class="panel">
             <h3>Custom CC Mapping & Pistons</h3>
             <div id="settings-mapping-container"></div>
