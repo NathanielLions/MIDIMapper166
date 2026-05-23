@@ -1085,3 +1085,31 @@ window.toggleDarkMode = toggleDarkMode;
 window.toggleMidiVals = toggleMidiVals;
 
 buildSettingsUI(); buildEditorUI();
+
+// ==========================================
+// UI TAB CONTROLS
+// ==========================================
+window.openTab = function(evt, tabName) {
+    // 1. Hide all elements with the class "tabcontent"
+    const tabcontent = document.getElementsByClassName("tabcontent");
+    for (let i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+    }
+
+    // 2. Remove the class "active" from all tab buttons
+    const tablinks = document.getElementsByClassName("tablinks");
+    for (let i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+
+    // 3. Show the current tab, and add an "active" class to the button
+    const targetTab = document.getElementById(tabName);
+    if (targetTab) {
+        targetTab.style.display = "block";
+    }
+    
+    // 4. Highlight the button that was clicked
+    if (evt && evt.currentTarget) {
+        evt.currentTarget.className += " active";
+    }
+};
