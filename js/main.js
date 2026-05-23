@@ -1,7 +1,7 @@
 // ==========================================
 // 1. SOUNDFONT FETCH & AUDIO ENGINE STATE
 // ==========================================
-const SOUNDFONT_URL = "./Wurlitzer166.sf2"; 
+const SOUNDFONT_URL = "https://raw.githubusercontent.com/NathanielLions/MIDIMapper166/main/Virtual166.sf2"; 
 
 let audioCtx;
 let isPlaying = false;
