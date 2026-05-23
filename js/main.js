@@ -4,38 +4,38 @@
 const SOUNDFONT_URL = "https://raw.githubusercontent.com/NathanielLions/MIDIMapper166/main/Virtual166.sf2"; 
 
 let audioCtx;
-let synth; // SpessaSynth WorkletSynthesizer
+let synth; // SpessaSynth Audio Engine
+let seq;   // SpessaSynth Native MIDI Sequencer (NO TONE.JS!)
 let isPlaying = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
-let activeOscillators = [];
+let activeTimeouts = []; // <--- Changed from activeOscillators
 
 async function fetchSoundfont() {
     try {
         document.getElementById('audio-status').innerText = "⏳ Loading Virtual166.sf2...";
         
-        // 1. Ensure the Audio Context is created and awake
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-        // 2. Fetch the SF2 binary data from your GitHub
         const response = await fetch(SOUNDFONT_URL);
         if (!response.ok) throw new Error("Failed to download Virtual166.sf2.");
         const arrayBuffer = await response.arrayBuffer();
         
-        // 3. Import SpessaSynth Library (Updated V4 CDN)
-        const { WorkletSynthesizer } = await import("https://cdn.jsdelivr.net/npm/spessasynth_lib@4.2.15/dist/index.js");
+        // Import BOTH the Synthesizer and the Sequencer via esm.sh
+        const { WorkletSynthesizer, Sequencer } = await import("https://esm.sh/spessasynth_lib@4.2.15");
         
-        // 4. Load the required audio processing core into the browser's background thread
-        await audioCtx.audioWorklet.addModule("https://cdn.jsdelivr.net/npm/spessasynth_lib@4.2.15/dist/spessasynth_processor.min.js");
+        await audioCtx.audioWorklet.addModule("https://unpkg.com/spessasynth_lib@4.2.15/dist/spessasynth_processor.min.js");
         
-        // 5. Initialize the synthesizer and attach your SoundFont
         synth = new WorkletSynthesizer(audioCtx);
         await synth.soundBankManager.addSoundBank(arrayBuffer, "main");
-        await synth.isReady; // Wait until it is fully spun up
+        await synth.isReady; 
+
+        // Store the Sequencer class globally so your file uploader can use it
+        window.SpessaSequencer = Sequencer;
         
-        document.getElementById('audio-status').innerText = "✅ SoundFont Ready!";
+        document.getElementById('audio-status').innerText = "✅ Wurlitzer SoundFont Ready!";
     } catch (err) {
         document.getElementById('audio-status').innerText = "❌ Error Loading SoundFont";
         console.error("SpessaSynth Initialization Error:", err);
@@ -77,9 +77,18 @@ function stopPlayback() {
 }
 
 function killAllNotes() {
-    activeOscillators.forEach(osc => { try { osc.stop(); } catch(e){} });
-    activeOscillators = [];
+    // 1. Cancel any notes scheduled in the future
+    activeTimeouts.forEach(t => clearTimeout(t));
+    activeTimeouts = [];
     scheduledNotes.clear();
+    
+    // 2. Tell SpessaSynth to immediately silence all Wurlitzer pipes
+    if (synth) {
+        for (let i = 0; i < 16; i++) {
+            synth.controllerChange(i, 120, 0); // MIDI Panic: All Sound Off
+            synth.controllerChange(i, 123, 0); // MIDI Panic: All Notes Off
+        }
+    }
 }
 
 function scheduler() {
@@ -137,71 +146,43 @@ function getActiveStopsForChannel(channel) {
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
-    let playTime = audioCtx.currentTime + delaySeconds;
+    if (!synth) return; // Don't play if the Virtual166 SoundFont isn't loaded yet
+
+    let delayMs = Math.max(0, delaySeconds * 1000);
+    let durationMs = note.duration * 1000;
     
-    // Handle Rhythm Track (Channel 10 / index 9)
+    // Only play if it's the rhythm track (channel 9) OR if visual stops are pulled
+    let shouldPlay = false;
     if (channel === 9) {
-        let osc = audioCtx.createOscillator();
-        let gain = audioCtx.createGain();
-        
-        // Use a noise-like quality for rhythm
-        osc.type = 'triangle';
-        // Lower frequency for bass notes, higher for snare-range
-        let freq = note.midi < 40 ? 60 : 200; 
-        osc.frequency.setValueAtTime(freq, playTime);
-        osc.frequency.exponentialRampToValueAtTime(10, playTime + 0.1);
-
-        gain.gain.setValueAtTime(0.1, playTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, playTime + 0.1);
-
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(playTime);
-        osc.stop(playTime + 0.1);
-        activeOscillators.push(osc);
-        return; 
+        shouldPlay = true; 
+    } else {
+        let activeStops = getActiveStopsForChannel(channel);
+        if (activeStops.length > 0) shouldPlay = true;
     }
 
-    let activeStops = getActiveStopsForChannel(channel);
-    
-    if (activeStops.length === 0) return; 
+    if (!shouldPlay) return; // Mute channel if no stops are active
 
-    let attack = 0.02;
-    let release = 0.02;
-    if (note.duration < 0.04) {
-        attack = note.duration / 2;
-        release = note.duration / 2;
-    }
-    
-    activeStops.forEach(stop => {
-        let osc = audioCtx.createOscillator();
-        let gain = audioCtx.createGain();
-        
-        if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
-        else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
-        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; 
-        else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
-        else osc.type = 'square';
-        
-        osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
-        
-        let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
-        let peakVolume = 0.08 * swellVal;
-        
-        gain.gain.setValueAtTime(0, playTime);
-        gain.gain.linearRampToValueAtTime(peakVolume, playTime + attack); 
-        gain.gain.setValueAtTime(peakVolume, Math.max(playTime + attack, playTime + note.duration - release)); 
-        gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
-        
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        
-        osc.start(playTime);
-        osc.stop(playTime + note.duration);
-        activeOscillators.push(osc);
-    });
-    
-    setTimeout(() => { activeOscillators = activeOscillators.filter(o => o !== null); }, (note.duration + delaySeconds) * 1000 + 100);
+    // Check your UI's Expression/Swell pedal switch to set the volume velocity
+    let swellSwitch = document.getElementById('swell-switch');
+    let velocity = (swellSwitch && swellSwitch.checked) ? 127 : 60;
+
+    // Schedule the pipe to turn ON
+    let onTimeout = setTimeout(() => {
+        synth.noteOn(channel, note.midi, velocity);
+    }, delayMs);
+
+    // Schedule the pipe to turn OFF
+    let offTimeout = setTimeout(() => {
+        synth.noteOff(channel, note.midi);
+    }, delayMs + durationMs);
+
+    // Store timeouts so they can be canceled if the user hits Pause
+    activeTimeouts.push(onTimeout, offTimeout);
+
+    // Clean up the memory once the note finishes playing
+    setTimeout(() => {
+        activeTimeouts = activeTimeouts.filter(t => t !== onTimeout && t !== offTimeout);
+    }, delayMs + durationMs + 100);
 }
 
 // ==========================================
@@ -683,9 +664,15 @@ window.onload = () => {
 };
 
 document.getElementById('midi-upload').addEventListener('change', async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
-    currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    fileName = file.name.replace(".mid", ""); 
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // Parses the file into JSON so your UI can read the tracks
+    currentMidi = new Midi(arrayBuffer); 
+    ppq = currentMidi.header.ppq || 384; 
     
     let systemTrack = getSystemTrack();
     
