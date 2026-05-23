@@ -1,42 +1,26 @@
 // ==========================================
 // 1. SOUNDFONT FETCH & AUDIO ENGINE STATE
 // ==========================================
-const SOUNDFONT_URL = "https://raw.githubusercontent.com/NathanielLions/MIDIMapper166/main/Virtual166.sf2"; 
+const SOUNDFONT_URL = "./Wurlitzer166.sf2"; 
 
 let audioCtx;
-let synth; // SpessaSynth WorkletSynthesizer
 let isPlaying = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
-let activeTimeouts = [];
+let activeOscillators = [];
 
 async function fetchSoundfont() {
     try {
-        document.getElementById('audio-status').innerText = "⏳ Loading Virtual166.sf2...";
-        
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-
+        document.getElementById('audio-status').innerText = "⏳ Loading Wurlitzer166.sf2...";
         const response = await fetch(SOUNDFONT_URL);
-        if (!response.ok) throw new Error("Failed to download Virtual166.sf2.");
         const arrayBuffer = await response.arrayBuffer();
-        
-        // 🚨 THE FIX IS HERE: Added ?bundle to the end of the URL
-        const { WorkletSynthesizer } = await import("https://esm.sh/spessasynth_lib@4.2.15?bundle");
-        
-        await audioCtx.audioWorklet.addModule("https://unpkg.com/spessasynth_lib@4.2.15/dist/spessasynth_processor.min.js");
-        
-        synth = new WorkletSynthesizer(audioCtx);
-        await synth.soundBankManager.addSoundBank(arrayBuffer, "main");
-        await synth.isReady; 
-        
-        document.getElementById('audio-status').innerText = "✅ SoundFont Ready!";
+        document.getElementById('audio-status').innerText = "";
     } catch (err) {
-        document.getElementById('audio-status').innerText = "❌ Error Loading SoundFont";
-        console.error("SpessaSynth Initialization Error:", err);
+        document.getElementById('audio-status').innerText = "";
     }
 }
+
 function initAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -72,18 +56,9 @@ function stopPlayback() {
 }
 
 function killAllNotes() {
-    // 1. Cancel any notes scheduled in the future
-    activeTimeouts.forEach(t => clearTimeout(t));
-    activeTimeouts = [];
+    activeOscillators.forEach(osc => { try { osc.stop(); } catch(e){} });
+    activeOscillators = [];
     scheduledNotes.clear();
-    
-    // 2. Tell SpessaSynth to immediately silence all Wurlitzer pipes
-    if (synth) {
-        for (let i = 0; i < 16; i++) {
-            synth.controllerChange(i, 120, 0); // MIDI Panic: All Sound Off
-            synth.controllerChange(i, 123, 0); // MIDI Panic: All Notes Off
-        }
-    }
 }
 
 function scheduler() {
@@ -141,43 +116,71 @@ function getActiveStopsForChannel(channel) {
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
-    if (!synth) return; // Don't play if the Virtual166 SoundFont isn't loaded yet
-
-    let delayMs = Math.max(0, delaySeconds * 1000);
-    let durationMs = note.duration * 1000;
+    let playTime = audioCtx.currentTime + delaySeconds;
     
-    // Only play if it's the rhythm track (channel 9) OR if visual stops are pulled
-    let shouldPlay = false;
+    // Handle Rhythm Track (Channel 10 / index 9)
     if (channel === 9) {
-        shouldPlay = true; 
-    } else {
-        let activeStops = getActiveStopsForChannel(channel);
-        if (activeStops.length > 0) shouldPlay = true;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        
+        // Use a noise-like quality for rhythm
+        osc.type = 'triangle';
+        // Lower frequency for bass notes, higher for snare-range
+        let freq = note.midi < 40 ? 60 : 200; 
+        osc.frequency.setValueAtTime(freq, playTime);
+        osc.frequency.exponentialRampToValueAtTime(10, playTime + 0.1);
+
+        gain.gain.setValueAtTime(0.1, playTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, playTime + 0.1);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(playTime);
+        osc.stop(playTime + 0.1);
+        activeOscillators.push(osc);
+        return; 
     }
 
-    if (!shouldPlay) return; // Mute channel if no stops are active
+    let activeStops = getActiveStopsForChannel(channel);
+    
+    if (activeStops.length === 0) return; 
 
-    // Check your UI's Expression/Swell pedal switch to set the volume velocity
-    let swellSwitch = document.getElementById('swell-switch');
-    let velocity = (swellSwitch && swellSwitch.checked) ? 127 : 60;
-
-    // Schedule the pipe to turn ON
-    let onTimeout = setTimeout(() => {
-        synth.noteOn(channel, note.midi, velocity);
-    }, delayMs);
-
-    // Schedule the pipe to turn OFF
-    let offTimeout = setTimeout(() => {
-        synth.noteOff(channel, note.midi);
-    }, delayMs + durationMs);
-
-    // Store timeouts so they can be canceled if the user hits Pause
-    activeTimeouts.push(onTimeout, offTimeout);
-
-    // Clean up the memory once the note finishes playing
-    setTimeout(() => {
-        activeTimeouts = activeTimeouts.filter(t => t !== onTimeout && t !== offTimeout);
-    }, delayMs + durationMs + 100);
+    let attack = 0.02;
+    let release = 0.02;
+    if (note.duration < 0.04) {
+        attack = note.duration / 2;
+        release = note.duration / 2;
+    }
+    
+    activeStops.forEach(stop => {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        
+        if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
+        else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
+        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; 
+        else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
+        else osc.type = 'square';
+        
+        osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
+        
+        let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
+        let peakVolume = 0.08 * swellVal;
+        
+        gain.gain.setValueAtTime(0, playTime);
+        gain.gain.linearRampToValueAtTime(peakVolume, playTime + attack); 
+        gain.gain.setValueAtTime(peakVolume, Math.max(playTime + attack, playTime + note.duration - release)); 
+        gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start(playTime);
+        osc.stop(playTime + note.duration);
+        activeOscillators.push(osc);
+    });
+    
+    setTimeout(() => { activeOscillators = activeOscillators.filter(o => o !== null); }, (note.duration + delaySeconds) * 1000 + 100);
 }
 
 // ==========================================
@@ -659,15 +662,9 @@ window.onload = () => {
 };
 
 document.getElementById('midi-upload').addEventListener('change', async (e) => {
-    const file = e.target.files[0]; 
-    if (!file) return;
-    
-    fileName = file.name.replace(".mid", ""); 
-    const arrayBuffer = await file.arrayBuffer();
-    
-    // Parses the file into JSON so your UI can read the tracks
-    currentMidi = new Midi(arrayBuffer); 
-    ppq = currentMidi.header.ppq || 384; 
+    const file = e.target.files[0]; if (!file) return;
+    fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
+    currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
     
     let systemTrack = getSystemTrack();
     
@@ -1067,31 +1064,3 @@ window.toggleDarkMode = toggleDarkMode;
 window.toggleMidiVals = toggleMidiVals;
 
 buildSettingsUI(); buildEditorUI();
-
-// ==========================================
-// UI TAB CONTROLS
-// ==========================================
-window.openTab = function(evt, tabName) {
-    // 1. Hide all elements with the class "tabcontent"
-    const tabcontent = document.getElementsByClassName("tabcontent");
-    for (let i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-    }
-
-    // 2. Remove the class "active" from all tab buttons
-    const tablinks = document.getElementsByClassName("tablinks");
-    for (let i = 0; i < tablinks.length; i++) {
-        tablinks[i].className = tablinks[i].className.replace(" active", "");
-    }
-
-    // 3. Show the current tab, and add an "active" class to the button
-    const targetTab = document.getElementById(tabName);
-    if (targetTab) {
-        targetTab.style.display = "block";
-    }
-    
-    // 4. Highlight the button that was clicked
-    if (evt && evt.currentTarget) {
-        evt.currentTarget.className += " active";
-    }
-};
