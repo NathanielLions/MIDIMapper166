@@ -4,13 +4,12 @@
 const SOUNDFONT_URL = "https://raw.githubusercontent.com/NathanielLions/MIDIMapper166/main/Virtual166.sf2"; 
 
 let audioCtx;
-let synth; // SpessaSynth Audio Engine
-let seq;   // SpessaSynth Native MIDI Sequencer (NO TONE.JS!)
+let synth; // SpessaSynth WorkletSynthesizer
 let isPlaying = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
-let activeTimeouts = []; // <--- Changed from activeOscillators
+let activeTimeouts = [];
 
 async function fetchSoundfont() {
     try {
@@ -23,25 +22,21 @@ async function fetchSoundfont() {
         if (!response.ok) throw new Error("Failed to download Virtual166.sf2.");
         const arrayBuffer = await response.arrayBuffer();
         
-        // Import BOTH the Synthesizer and the Sequencer via esm.sh
-        const { WorkletSynthesizer, Sequencer } = await import("https://esm.sh/spessasynth_lib@4.2.15");
+        // 🚨 THE FIX IS HERE: Added ?bundle to the end of the URL
+        const { WorkletSynthesizer } = await import("https://esm.sh/spessasynth_lib@4.2.15?bundle");
         
         await audioCtx.audioWorklet.addModule("https://unpkg.com/spessasynth_lib@4.2.15/dist/spessasynth_processor.min.js");
         
         synth = new WorkletSynthesizer(audioCtx);
         await synth.soundBankManager.addSoundBank(arrayBuffer, "main");
         await synth.isReady; 
-
-        // Store the Sequencer class globally so your file uploader can use it
-        window.SpessaSequencer = Sequencer;
         
-        document.getElementById('audio-status').innerText = "✅ Wurlitzer SoundFont Ready!";
+        document.getElementById('audio-status').innerText = "✅ SoundFont Ready!";
     } catch (err) {
         document.getElementById('audio-status').innerText = "❌ Error Loading SoundFont";
         console.error("SpessaSynth Initialization Error:", err);
     }
 }
-
 function initAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
