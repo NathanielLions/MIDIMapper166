@@ -4,6 +4,7 @@
 const SOUNDFONT_URL = "https://raw.githubusercontent.com/NathanielLions/MIDIMapper166/main/Virtual166.sf2"; 
 
 let audioCtx;
+let synth; // SpessaSynth WorkletSynthesizer
 let isPlaying = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
@@ -14,21 +15,30 @@ async function fetchSoundfont() {
     try {
         document.getElementById('audio-status').innerText = "⏳ Loading Virtual166.sf2...";
         
-        // 1. Fetch the binary data
+        // 1. Ensure the Audio Context is created and awake
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+        // 2. Fetch the SF2 binary data from your GitHub
         const response = await fetch(SOUNDFONT_URL);
+        if (!response.ok) throw new Error("Failed to download Virtual166.sf2.");
         const arrayBuffer = await response.arrayBuffer();
         
-        // 2. Make sure the Web Audio API is awake
-        initAudio();
+        // 3. Import SpessaSynth Library (Updated V4 CDN)
+        const { WorkletSynthesizer } = await import("https://cdn.jsdelivr.net/npm/spessasynth_lib@4.2.15/dist/index.js");
         
-        // 3. Import SpessaSynth and inject the SoundFont data into it
-        const { Synthesizer } = await import("https://jsdelivr.net/gh/spessas/SpessaSynth@master/src/spessasynth_lib/synthesizer/synthesizer.js");
-        synth = new Synthesizer(audioCtx.destination, arrayBuffer);
+        // 4. Load the required audio processing core into the browser's background thread
+        await audioCtx.audioWorklet.addModule("https://cdn.jsdelivr.net/npm/spessasynth_lib@4.2.15/dist/spessasynth_processor.min.js");
+        
+        // 5. Initialize the synthesizer and attach your SoundFont
+        synth = new WorkletSynthesizer(audioCtx);
+        await synth.soundBankManager.addSoundBank(arrayBuffer, "main");
+        await synth.isReady; // Wait until it is fully spun up
         
         document.getElementById('audio-status').innerText = "✅ SoundFont Ready!";
     } catch (err) {
         document.getElementById('audio-status').innerText = "❌ Error Loading SoundFont";
-        console.error(err);
+        console.error("SpessaSynth Initialization Error:", err);
     }
 }
 
