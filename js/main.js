@@ -12,12 +12,23 @@ let activeOscillators = [];
 
 async function fetchSoundfont() {
     try {
-        document.getElementById('audio-status').innerText = "⏳ Loading Wurlitzer166.sf2...";
+        document.getElementById('audio-status').innerText = "⏳ Loading Virtual166.sf2...";
+        
+        // 1. Fetch the binary data
         const response = await fetch(SOUNDFONT_URL);
         const arrayBuffer = await response.arrayBuffer();
-        document.getElementById('audio-status').innerText = "";
+        
+        // 2. Make sure the Web Audio API is awake
+        initAudio();
+        
+        // 3. Import SpessaSynth and inject the SoundFont data into it
+        const { Synthesizer } = await import("https://jsdelivr.net/gh/spessas/SpessaSynth@master/src/spessasynth_lib/synthesizer/synthesizer.js");
+        synth = new Synthesizer(audioCtx.destination, arrayBuffer);
+        
+        document.getElementById('audio-status').innerText = "✅ SoundFont Ready!";
     } catch (err) {
-        document.getElementById('audio-status').innerText = "";
+        document.getElementById('audio-status').innerText = "❌ Error Loading SoundFont";
+        console.error(err);
     }
 }
 
