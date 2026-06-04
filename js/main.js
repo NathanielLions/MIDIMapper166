@@ -1051,7 +1051,7 @@ window.exportMidi = function() {
     const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
     const a = document.createElement("a"); 
     a.href = URL.createObjectURL(blob); 
-    a.download = fileName + "_W166.mid"; 
+    a.download = fileName + "_FAIRO.mid"; 
     a.click(); 
 };
 
