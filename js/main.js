@@ -120,7 +120,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
     
     // Handle Rhythm Track (Channel 10 / index 9)
     if (channel === 9) {
-        let osc = audioCtx.createOscillator();
+        synth.noteOn(...)
         let gain = audioCtx.createGain();
         
         // Use a noise-like quality for rhythm
@@ -153,7 +153,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
     }
     
     activeStops.forEach(stop => {
-        let osc = audioCtx.createOscillator();
+        synth.noteOn(...)
         let gain = audioCtx.createGain();
         
         if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
