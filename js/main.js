@@ -9,7 +9,6 @@ let isPlaying = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
-let activeOscillators = [];
 let synth;
 
 async function fetchSoundfont() {
@@ -73,8 +72,10 @@ function stopPlayback() {
 }
 
 function killAllNotes() {
-    activeOscillators.forEach(osc => { try { osc.stop(); } catch(e){} });
-    activeOscillators = [];
+    if (synth) {
+        synth.stopAllChannels();
+    }
+
     scheduledNotes.clear();
 }
 
@@ -133,71 +134,18 @@ function getActiveStopsForChannel(channel) {
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
-    let playTime = audioCtx.currentTime + delaySeconds;
-    
-    // Handle Rhythm Track (Channel 10 / index 9)
-    if (channel === 9) {
-        synth.noteOn(...)
-        let gain = audioCtx.createGain();
-        
-        // Use a noise-like quality for rhythm
-        osc.type = 'triangle';
-        // Lower frequency for bass notes, higher for snare-range
-        let freq = note.midi < 40 ? 60 : 200; 
-        osc.frequency.setValueAtTime(freq, playTime);
-        osc.frequency.exponentialRampToValueAtTime(10, playTime + 0.1);
 
-        gain.gain.setValueAtTime(0.1, playTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, playTime + 0.1);
+    let velocity = Math.floor((note.velocity || 1) * 127);
 
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(playTime);
-        osc.stop(playTime + 0.1);
-        activeOscillators.push(osc);
-        return; 
-    }
+    setTimeout(() => {
 
-    let activeStops = getActiveStopsForChannel(channel);
-    
-    if (activeStops.length === 0) return; 
+        synth.noteOn(channel, note.midi, velocity);
 
-    let attack = 0.02;
-    let release = 0.02;
-    if (note.duration < 0.04) {
-        attack = note.duration / 2;
-        release = note.duration / 2;
-    }
-    
-    activeStops.forEach(stop => {
-        synth.noteOn(...)
-        let gain = audioCtx.createGain();
-        
-        if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
-        else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
-        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; 
-        else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
-        else osc.type = 'square';
-        
-        osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
-        
-        let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
-        let peakVolume = 0.08 * swellVal;
-        
-        gain.gain.setValueAtTime(0, playTime);
-        gain.gain.linearRampToValueAtTime(peakVolume, playTime + attack); 
-        gain.gain.setValueAtTime(peakVolume, Math.max(playTime + attack, playTime + note.duration - release)); 
-        gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
-        
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        
-        osc.start(playTime);
-        osc.stop(playTime + note.duration);
-        activeOscillators.push(osc);
-    });
-    
-    setTimeout(() => { activeOscillators = activeOscillators.filter(o => o !== null); }, (note.duration + delaySeconds) * 1000 + 100);
+        setTimeout(() => {
+            synth.noteOff(channel, note.midi);
+        }, note.duration * 1000);
+
+    }, delaySeconds * 1000);
 }
 
 // ==========================================
