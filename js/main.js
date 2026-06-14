@@ -3,7 +3,7 @@
 // ==========================================
 const SOUNDFONT_URL =
 "https://nathaniellions.github.io/MIDIMapper166/Virtual166.sf2";
-
+console.log(SpessaSynth);
 let audioCtx;
 let isPlaying = false;
 let startTimeMs = 0;
@@ -30,6 +30,7 @@ async function initAudio() {
         await audioCtx.resume();
 
     if (!synth) {
+        console.log(SpessaSynth);
         synth = new SpessaSynth.Synthesizer(audioCtx.destination);
 
         const response = await fetch(SOUNDFONT_URL);
@@ -43,7 +44,7 @@ async function initAudio() {
 }
 
 async function togglePlay() {
-    initAudio();
+    await initAudio();
     if (isPlaying) {
         isPlaying = false;
         document.getElementById('play-btn').innerText = "▶ Play";
