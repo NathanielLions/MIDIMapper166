@@ -614,7 +614,6 @@ function showRemapModal(unknowns) {
 }
 
 window.onload = () => { 
-    fetchSoundfont(); 
     createImportModal();
 };
 
