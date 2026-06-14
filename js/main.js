@@ -1,7 +1,8 @@
 // ==========================================
 // 1. SOUNDFONT FETCH & AUDIO ENGINE STATE
 // ==========================================
-const SOUNDFONT_URL = "./Wurlitzer166.sf2"; 
+const SOUNDFONT_URL =
+"https://nathaniellions.github.io/MIDIMapper166/Virtual166.sf2";
 
 let audioCtx;
 let isPlaying = false;
@@ -9,6 +10,7 @@ let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
 let activeOscillators = [];
+let synth;
 
 async function fetchSoundfont() {
     try {
@@ -21,9 +23,24 @@ async function fetchSoundfont() {
     }
 }
 
-function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+async function initAudio() {
+    if (!audioCtx)
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (audioCtx.state === 'suspended')
+        await audioCtx.resume();
+
+    if (!synth) {
+        synth = new SpessaSynth.Synthetizer(audioCtx.destination);
+
+        const response = await fetch(SOUNDFONT_URL);
+        const sf2 = await response.arrayBuffer();
+
+        await synth.loadSFont(sf2);
+
+        document.getElementById('audio-status').innerText =
+            "🔊 Wurlitzer 166 Ready";
+    }
 }
 
 function togglePlay() {
