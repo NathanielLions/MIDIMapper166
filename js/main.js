@@ -31,7 +31,11 @@ async function initAudio() {
 
     if (!synth) {
         console.log(Object.keys(SpessaSynth));
-        synth = new SpessaSynth.Synthesizer(audioCtx);
+        await audioCtx.audioWorklet.addModule(
+    "../worklet_processor.min.js"
+);
+
+synth = new SpessaSynth.WorkletSynthesizer(audioCtx);
 
         const response = await fetch(SOUNDFONT_URL);
         const sf2 = await response.arrayBuffer();
