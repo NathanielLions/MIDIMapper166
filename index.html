@@ -6,17 +6,15 @@
     <title>W166 MIDI Mapper</title>
     
     <script src="https://unpkg.com/@tonejs/midi"></script>
-    <script type="module">
-import * as SpessaSynth from
-'https://cdn.jsdelivr.net/npm/spessasynth_lib@4.3.7/dist/spessasynth_lib.js';
 
-window.SpessaSynth = SpessaSynth;
-</script>
+    <script type="module">
+        import * as SpessaSynth from
+        'https://cdn.jsdelivr.net/npm/spessasynth_lib@4.3.7/+esm';
+
+        window.SpessaSynth = SpessaSynth;
+    </script>
     
     <link rel="stylesheet" href="css/styles.css">
-    <script type="module">
-import { Synthetizer } from 'https://unpkg.com/spessasynth_lib/dist/spessasynth_lib.js';
-</script>
 </head>
 <body class="hide-midi-vals">
 
