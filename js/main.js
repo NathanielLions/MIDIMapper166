@@ -30,11 +30,8 @@ async function initAudio() {
         await audioCtx.resume();
 
     if (!synth) {
-
-        await audioCtx.audioWorklet.addModule(
-    'https://unpkg.com/spessasynth_lib@4.3.7/dist/worklet_processor.min.js'
-);
-        synth = new SpessaSynth.WorkerSynthesizer(audioCtx);
+        console.log(Object.keys(SpessaSynth));
+        synth = new SpessaSynth.Synthesizer(audioCtx);
 
         const response = await fetch(SOUNDFONT_URL);
         const sf2 = await response.arrayBuffer();
@@ -45,6 +42,7 @@ async function initAudio() {
             "🔊 Wurlitzer 166 Ready";
     }
 }
+
 async function togglePlay() {
     await initAudio();
     if (isPlaying) {
