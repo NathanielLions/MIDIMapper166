@@ -42,7 +42,7 @@ async function initAudio() {
     }
 }
 
-function togglePlay() {
+async function togglePlay() {
     initAudio();
     if (isPlaying) {
         isPlaying = false;
