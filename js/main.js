@@ -22,6 +22,7 @@ async function fetchSoundfont() {
 }
 
 async function initAudio() {
+
     if (!audioCtx)
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -29,7 +30,10 @@ async function initAudio() {
         await audioCtx.resume();
 
     if (!synth) {
-        synth = new SpessaSynth.WorkerSynthesizer(audioCtx.destination);
+
+        await SpessaSynth.registerPlaybackWorklet(audioCtx);
+
+        synth = new SpessaSynth.WorkerSynthesizer(audioCtx);
 
         const response = await fetch(SOUNDFONT_URL);
         const sf2 = await response.arrayBuffer();
