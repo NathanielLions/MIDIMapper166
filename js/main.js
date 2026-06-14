@@ -10,40 +10,17 @@ let startMidiSeconds = 0;
 let scheduledNotes = new Set();
 let synth;
 
-async function fetchSoundfont() {
-    try {
-        document.getElementById('audio-status').innerText = "⏳ Loading Wurlitzer166.sf2...";
-        const response = await fetch(SOUNDFONT_URL);
-        const arrayBuffer = await response.arrayBuffer();
-        document.getElementById('audio-status').innerText = "";
-    } catch (err) {
-        document.getElementById('audio-status').innerText = "";
-    }
-}
-
 async function initAudio() {
 
-    if (!audioCtx)
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    if (audioCtx.state === 'suspended')
-        await audioCtx.resume();
-
     if (!synth) {
-        console.log(Object.keys(SpessaSynth));
-        await audioCtx.audioWorklet.addModule(
-    "../worklet_processor.min.js"
-);
 
-synth = new SpessaSynth.WorkletSynthesizer(audioCtx);
+        synth = new WebAudioTinySynth();
 
-        const response = await fetch(SOUNDFONT_URL);
-        const sf2 = await response.arrayBuffer();
+       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        await synth.loadSFont(sf2);
-
+synth.setAudioContext(audioCtx);
         document.getElementById('audio-status').innerText =
-            "🔊 Wurlitzer 166 Ready";
+            "🔊 TinySynth Ready";
     }
 }
 
@@ -144,13 +121,23 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 
     setTimeout(() => {
 
-        synth.noteOn(channel, note.midi, velocity);
+    synth.send([
+        0x90 + channel,
+        note.midi,
+        velocity
+    ]);
 
-        setTimeout(() => {
-            synth.noteOff(channel, note.midi);
-        }, note.duration * 1000);
+    setTimeout(() => {
 
-    }, delaySeconds * 1000);
+        synth.send([
+            0x80 + channel,
+            note.midi,
+            0
+        ]);
+
+    }, note.duration * 1000);
+
+}, delaySeconds * 1000);
 }
 
 // ==========================================
