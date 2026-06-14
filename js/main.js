@@ -1,8 +1,6 @@
 // ==========================================
 // 1. SOUNDFONT FETCH & AUDIO ENGINE STATE
 // ==========================================
-const SOUNDFONT_URL =
-"https://nathaniellions.github.io/MIDIMapper166/Virtual166.sf2";
 let audioCtx;
 let isPlaying = false;
 let startTimeMs = 0;
@@ -14,11 +12,13 @@ async function initAudio() {
 
     if (!synth) {
 
-        synth = new WebAudioTinySynth();
+        synth = new WebAudioTinySynth({
+            quality: 1,
+            useReverb: 1
+        });
 
-       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx = synth.audioContext;
 
-synth.setAudioContext(audioCtx);
         document.getElementById('audio-status').innerText =
             "🔊 TinySynth Ready";
     }
