@@ -119,14 +119,6 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 
     let activeStops = getActiveStopsForChannel(channel);
 
-    if (activeStops.length === 0) {
-        activeStops = [{
-            instrument: 0,
-            octave: 0,
-            volume: 1.0
-        }];
-    }
-
     setTimeout(() => {
 
         activeStops.forEach(stop => {
@@ -748,6 +740,18 @@ onchange="updateMapping('${manual}', ${i}, 'instrument', this.value)"
 <option value="127" ${s.instrument == 127 ? 'selected' : ''}>Gunshot</option>
 
 </select>
+
+<input
+type="number"
+step="0.1"
+min="0"
+max="3"
+class="mapping-input"
+style="width: 60px;"
+value="${s.volume || 1}"
+onchange="updateMapping('${manual}', ${i}, 'volume', this.value)"
+title="Volume"
+>
 
 <input
 type="number"
