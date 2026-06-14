@@ -32,7 +32,7 @@ async function initAudio() {
     if (!synth) {
 
         await audioCtx.audioWorklet.addModule(
-    'https://cdn.jsdelivr.net/npm/spessasynth_lib@4.3.7/dist/worklet_processor.min.js'
+    'https://unpkg.com/spessasynth_lib@4.3.7/dist/worklet_processor.min.js'
 );
         synth = new SpessaSynth.WorkerSynthesizer(audioCtx);
 
