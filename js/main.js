@@ -30,7 +30,7 @@ async function initAudio() {
         await audioCtx.resume();
 
     if (!synth) {
-        synth = new SpessaSynth.Synthetizer(audioCtx.destination);
+        synth = new SpessaSynth.Synthesizer(audioCtx.destination);
 
         const response = await fetch(SOUNDFONT_URL);
         const sf2 = await response.arrayBuffer();
