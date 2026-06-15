@@ -97,27 +97,58 @@ function scheduler() {
     requestAnimationFrame(scheduler);
 }
 
-function getActiveStopsForChannel(channel) {
+function getActiveStopsForNote(channel, midiNote) {
+
     let activeStops = [];
+
     for (const [manual, stops] of Object.entries(organStructure)) {
+
         let match = manual.match(/Ch (\d+)/);
-        if (match) {
-            let rawChannel = parseInt(match[1]) - 1; 
-            if (rawChannel === channel) {
-                stops.forEach(s => {
-                    if (s.visible === false) return;
-                    let cb = document.getElementById(`stop-${s.val}`);
-                    if (cb && cb.checked) activeStops.push(s);
-                });
-            }
+
+        if (!match) continue;
+
+        let rawChannel = parseInt(match[1]) - 1;
+
+        if (rawChannel !== channel) continue;
+
+        // =====================================
+        // NOTE RANGE SPLITTING
+        // =====================================
+
+        if (
+            manual.includes("Bass") &&
+            (midiNote < 36 || midiNote > 48)
+        ) {
+            continue;
         }
+
+        if (
+            manual.includes("Countermelody") &&
+            (midiNote < 65 || midiNote > 96)
+        ) {
+            continue;
+        }
+
+        stops.forEach(s => {
+
+            if (s.visible === false) return;
+
+            let cb = document.getElementById(`stop-${s.val}`);
+
+            if (cb && cb.checked) {
+                activeStops.push(s);
+            }
+
+        });
     }
+
     return activeStops;
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
 
-    let activeStops = getActiveStopsForChannel(channel);
+    let activeStops =
+    getActiveStopsForNote(channel, note.midi);
 
     setTimeout(() => {
 
