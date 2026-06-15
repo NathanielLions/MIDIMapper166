@@ -152,25 +152,76 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 
     setTimeout(() => {
 
+// =====================================
+// PERCUSSION MASTER
+// =====================================
+
+let percussionEnabled = false;
+let percussionVolume = 1.0;
+
+let percSwitch =
+document.getElementById(`stop-${percCC}`);
+
+if (percSwitch && percSwitch.checked) {
+
+    percussionEnabled = true;
+
+    percussionVolume = 1.4;
+
+}
+        
         activeStops.forEach(stop => {
+
+            // =====================================
+// FORCE PERCUSSION TO MIDI CHANNEL 10
+// =====================================
+
+let outputChannel = channel;
+
+if (percussionEnabled) {
+    outputChannel = 9;
+}
 
             let finalMidi = note.midi + (stop.octave || 0);
 
-            let velocity = Math.min(
-                127,
-                Math.floor(
-                    ((note.velocity || 1) * 127) *
-                    (stop.volume || 1)
-                )
-            );
+            // =====================================
+// SWELL SHUTTERS
+// =====================================
+
+let swellMultiplier = 1.0;
+
+let swellSwitch =
+document.getElementById("swell-switch");
+
+if (
+    swellSwitch &&
+    !swellSwitch.checked
+) {
+    // shutters closed
+    swellMultiplier = 0.45;
+}
+
+// =====================================
+// FINAL VELOCITY
+// =====================================
+
+let velocity = Math.min(
+    127,
+    Math.floor(
+        ((note.velocity || 1) * 127) *
+        (stop.volume || 1) *
+swellMultiplier *
+percussionVolume
+    )
+);
 
             synth.send([
-                0xC0 + channel,
+                0xC0 + outputChannel,
                 stop.instrument || 0
             ]);
 
             synth.send([
-                0x90 + channel,
+                0x90 + outputChannel,
                 finalMidi,
                 velocity
             ]);
@@ -178,7 +229,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
             setTimeout(() => {
 
                 synth.send([
-                    0x80 + channel,
+                    0x80 + outputChannel,
                     finalMidi,
                     0
                 ]);
@@ -1441,7 +1492,33 @@ function draw() {
     ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
     for(let i = Math.ceil(st / ppq) * ppq; i <= st + windowTicks; i += ppq) { ctx.beginPath(); ctx.moveTo((i - st) * scaleX, 0); ctx.lineTo((i - st) * scaleX, rect.height); ctx.stroke(); }
     currentMidi.tracks.forEach(t => {
-        if (hiddenChannels.has(t.channel)) return; ctx.fillStyle = channelColors[t.channel % 16];
+        if (hiddenChannels.has(t.channel)) return;
+        let noteColor;
+
+if (
+    track.channel === 3 &&
+    note.midi >= 36 &&
+    note.midi <= 48
+) {
+    // BASS
+    noteColor = "#e74c3c";
+}
+
+else if (
+    track.channel === 3 &&
+    note.midi >= 65 &&
+    note.midi <= 96
+) {
+    // COUNTERMELODY
+    noteColor = "#3498db";
+}
+
+else {
+    noteColor =
+        channelColors[track.channel % 16];
+}
+
+ctx.fillStyle = noteColor;
         t.notes.forEach(n => { if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); });
     });
     let trk = getSystemTrack();
