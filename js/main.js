@@ -97,47 +97,97 @@ function scheduler() {
     requestAnimationFrame(scheduler);
 }
 
-function getActiveStopsForChannel(channel) {
+function getActiveStopsForNote(channel, midiNote) {
+
     let activeStops = [];
+
     for (const [manual, stops] of Object.entries(organStructure)) {
+
         let match = manual.match(/Ch (\d+)/);
-        if (match) {
-            let rawChannel = parseInt(match[1]) - 1; 
-            if (rawChannel === channel) {
-                stops.forEach(s => {
-                    if (s.visible === false) return;
-                    let cb = document.getElementById(`stop-${s.val}`);
-                    if (cb && cb.checked) activeStops.push(s);
-                });
-            }
+
+        if (!match) continue;
+
+        let rawChannel = parseInt(match[1]) - 1;
+
+        if (rawChannel !== channel) continue;
+
+        // =====================================
+        // NOTE RANGE SPLITTING
+        // =====================================
+
+        if (
+            manual.includes("Bass") &&
+            (midiNote < 36 || midiNote > 48)
+        ) {
+            continue;
         }
+
+        if (
+            manual.includes("Countermelody") &&
+            (midiNote < 65 || midiNote > 96)
+        ) {
+            continue;
+        }
+
+        stops.forEach(s => {
+
+            if (s.visible === false) return;
+
+            let cb = document.getElementById(`stop-${s.val}`);
+
+            if (cb && cb.checked) {
+                activeStops.push(s);
+            }
+
+        });
     }
+
     return activeStops;
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
 
-    let velocity = Math.floor((note.velocity || 1) * 127);
+    let activeStops =
+    getActiveStopsForNote(channel, note.midi);
 
     setTimeout(() => {
 
-    synth.send([
-        0x90 + channel,
-        note.midi,
-        velocity
-    ]);
+        activeStops.forEach(stop => {
 
-    setTimeout(() => {
+            let finalMidi = note.midi + (stop.octave || 0);
 
-        synth.send([
-            0x80 + channel,
-            note.midi,
-            0
-        ]);
+            let velocity = Math.min(
+                127,
+                Math.floor(
+                    ((note.velocity || 1) * 127) *
+                    (stop.volume || 1)
+                )
+            );
 
-    }, note.duration * 1000);
+            synth.send([
+                0xC0 + channel,
+                stop.instrument || 0
+            ]);
 
-}, delaySeconds * 1000);
+            synth.send([
+                0x90 + channel,
+                finalMidi,
+                velocity
+            ]);
+
+            setTimeout(() => {
+
+                synth.send([
+                    0x80 + channel,
+                    finalMidi,
+                    0
+                ]);
+
+            }, note.duration * 1000);
+
+        });
+
+    }, delaySeconds * 1000);
 }
 
 // ==========================================
@@ -215,21 +265,224 @@ const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 12;
 
 const DEFAULT_ORGAN_STRUCTURE = {
-    "Accompaniment (Ch 2)": [ 
-        { val: 70, name: "Open Flute", visible: true }, { val: 11, name: "Stopped Flute", visible: true }, { val: 48, name: "Strings 8", visible: true } , { val: 88, name: "Strings 4", visible: true }
+
+    "Accompaniment (Ch 2)": [
+
+        {
+            val: 70,
+            name: "Open Flute",
+            visible: true,
+            instrument: 73,
+            octave: 0,
+            volume: 1.0
+        },
+
+        {
+            val: 11,
+            name: "Stopped Flute",
+            visible: true,
+            instrument: 73,
+            octave: -12,
+            volume: 0.8
+        },
+
+        {
+            val: 48,
+            name: "Strings 8",
+            visible: true,
+            instrument: 40,
+            octave: 0,
+            volume: 0.9
+        },
+
+        {
+            val: 88,
+            name: "Strings 4",
+            visible: true,
+            instrument: 40,
+            octave: 12,
+            volume: 0.9
+        }
     ],
-    "Trumpetmelody (Ch 3)": [ 
-        { val: 68, name: "Baritone", visible: true }, { val: 56, name: "Trumpet", visible: true }, { val: 61, name: "Horn", visible: true },
-        { val: 42, name: "Cello", visible: true } 
+
+    "Trumpetmelody (Ch 3)": [
+
+        {
+            val: 68,
+            name: "Baritone",
+            visible: true,
+            instrument: 57,
+            octave: -12,
+            volume: 1.0
+        },
+
+        {
+            val: 56,
+            name: "Trumpet",
+            visible: true,
+            instrument: 56,
+            octave: 0,
+            volume: 1.0
+        },
+
+        {
+            val: 61,
+            name: "Horn",
+            visible: true,
+            instrument: 60,
+            octave: 0,
+            volume: 0.9
+        },
+
+        {
+            val: 42,
+            name: "Cello",
+            visible: true,
+            instrument: 42,
+            octave: -12,
+            volume: 1.0
+        }
     ],
-    "Countermelody (Ch 4)": [ 
-        { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
-        { val: 20, name: "Celeste", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
-        { val: 73, name: "Piccolo", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true }, { val: 83, name: "Tibia", visible: true },
-        { val: 86, name: "Bourdon", visible: true }, { val: 87, name: "Flute", visible: true }
+
+    "Countermelody (Ch 4)": [
+
+        {
+            val: 8,
+            name: "Glockenspiel",
+            visible: true,
+            instrument: 14,
+            octave: 24,
+            volume: 1.0
+        },
+
+        {
+            val: 10,
+            name: "Unaphone",
+            visible: true,
+            instrument: 11,
+            octave: 12,
+            volume: 0.9
+        },
+
+        {
+            val: 19,
+            name: "Prestant",
+            visible: true,
+            instrument: 41,
+            octave: 0,
+            volume: 0.9
+        },
+
+        {
+            val: 20,
+            name: "Celeste",
+            visible: true,
+            instrument: 41,
+            octave: 12,
+            volume: 0.7
+        },
+
+        {
+            val: 71,
+            name: "Clarinet",
+            visible: true,
+            instrument: 71,
+            octave: 0,
+            volume: 1.0
+        },
+
+        {
+            val: 40,
+            name: "Forte Violin",
+            visible: true,
+            instrument: 40,
+            octave: 0,
+            volume: 1.2
+        },
+
+        {
+            val: 73,
+            name: "Piccolo",
+            visible: true,
+            instrument: 72,
+            octave: 12,
+            volume: 1.0
+        },
+
+        {
+            val: 75,
+            name: "Flageolet",
+            visible: true,
+            instrument: 73,
+            octave: 12,
+            volume: 0.8
+        },
+
+        {
+            val: 82,
+            name: "Soft Violin",
+            visible: true,
+            instrument: 40,
+            octave: 0,
+            volume: 0.6
+        },
+
+        {
+            val: 83,
+            name: "Tibia",
+            visible: true,
+            instrument: 15,
+            octave: 12,
+            volume: 1.0
+        },
+
+        {
+            val: 86,
+            name: "Bourdon",
+            visible: true,
+            instrument: 15,
+            octave: 0,
+            volume: 1.0
+        },
+
+        {
+            val: 87,
+            name: "Flute",
+            visible: true,
+            instrument: 73,
+            octave: 0,
+            volume: 0.8
+        }
     ],
-    "Bass (Ch 4)": [ 
-        { val: 57, name: "Trombone", visible: true }, { val: 50, name: "Tuba", visible: true }, { val: 58, name: "Bass Flute", visible: true }
+
+    "Bass (Ch 4)": [
+
+        {
+            val: 57,
+            name: "Trombone",
+            visible: true,
+            instrument: 57,
+            octave: -12,
+            volume: 1.1
+        },
+
+        {
+            val: 50,
+            name: "Tuba",
+            visible: true,
+            instrument: 58,
+            octave: -12,
+            volume: 1.2
+        },
+
+        {
+            val: 58,
+            name: "Bass Flute",
+            visible: true,
+            instrument: 73,
+            octave: -12,
+            volume: 0.8
+        }
     ]
 };
 
@@ -354,8 +607,191 @@ function buildSettingsUI() {
             globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 5px; opacity: ${rowOp};">
                 <button style="background:#e74c3c; border:none; border-radius: 3px; cursor:pointer; font-size:0.7em; color: white; padding:2px 5px; margin-right: 5px;" onclick="deleteRank('${manual}', ${i})" title="Delete Stop">🗑️</button>
                 <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:${eyeOp}; padding:0;" onclick="toggleRankVisibility('${manual}', ${i})" title="Toggle Visibility">👁️</button>
-                <input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${s.val}" onchange="updateMapping('${manual}', ${i}, 'val', this.value)" title="MIDI CC">
-                <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor}; width: 120px;" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
+               <input type="number"
+class="mapping-input"
+style="width: 40px; padding: 2px;"
+value="${s.val}"
+onchange="updateMapping('${manual}', ${i}, 'val', this.value)"
+title="MIDI CC">
+
+<input type="text"
+style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor}; width: 120px;"
+value="${s.name}"
+onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
+
+<select
+class="mapping-input"
+style="width: 180px;"
+onchange="updateMapping('${manual}', ${i}, 'instrument', this.value)"
+
+>
+
+<option value="0" ${s.instrument == 0 ? 'selected' : ''}>Acoustic Grand Piano</option>
+<option value="1" ${s.instrument == 1 ? 'selected' : ''}>Bright Piano</option>
+<option value="2" ${s.instrument == 2 ? 'selected' : ''}>Electric Grand Piano</option>
+<option value="3" ${s.instrument == 3 ? 'selected' : ''}>Honky-tonk Piano</option>
+<option value="4" ${s.instrument == 4 ? 'selected' : ''}>Electric Piano 1</option>
+<option value="5" ${s.instrument == 5 ? 'selected' : ''}>Electric Piano 2</option>
+<option value="6" ${s.instrument == 6 ? 'selected' : ''}>Harpsichord</option>
+<option value="7" ${s.instrument == 7 ? 'selected' : ''}>Clavinet</option>
+
+<option value="8" ${s.instrument == 8 ? 'selected' : ''}>Celesta</option>
+<option value="9" ${s.instrument == 9 ? 'selected' : ''}>Glockenspiel</option>
+<option value="10" ${s.instrument == 10 ? 'selected' : ''}>Music Box</option>
+<option value="11" ${s.instrument == 11 ? 'selected' : ''}>Vibraphone</option>
+<option value="12" ${s.instrument == 12 ? 'selected' : ''}>Marimba</option>
+<option value="13" ${s.instrument == 13 ? 'selected' : ''}>Xylophone</option>
+<option value="14" ${s.instrument == 14 ? 'selected' : ''}>Tubular Bells</option>
+<option value="15" ${s.instrument == 15 ? 'selected' : ''}>Calliope</option>
+
+<option value="16" ${s.instrument == 16 ? 'selected' : ''}>Drawbar Organ</option>
+<option value="17" ${s.instrument == 17 ? 'selected' : ''}>Percussive Organ</option>
+<option value="18" ${s.instrument == 18 ? 'selected' : ''}>Rock Organ</option>
+<option value="19" ${s.instrument == 19 ? 'selected' : ''}>Church Organ</option>
+<option value="20" ${s.instrument == 20 ? 'selected' : ''}>Reed Organ</option>
+<option value="21" ${s.instrument == 21 ? 'selected' : ''}>Accordion</option>
+<option value="22" ${s.instrument == 22 ? 'selected' : ''}>Harmonica</option>
+<option value="23" ${s.instrument == 23 ? 'selected' : ''}>Bandoneon</option>
+
+<option value="24" ${s.instrument == 24 ? 'selected' : ''}>Nylon Guitar</option>
+<option value="25" ${s.instrument == 25 ? 'selected' : ''}>Steel Guitar</option>
+<option value="26" ${s.instrument == 26 ? 'selected' : ''}>Jazz Guitar</option>
+<option value="27" ${s.instrument == 27 ? 'selected' : ''}>Clean Guitar</option>
+<option value="28" ${s.instrument == 28 ? 'selected' : ''}>Muted Guitar</option>
+<option value="29" ${s.instrument == 29 ? 'selected' : ''}>Overdrive Guitar</option>
+<option value="30" ${s.instrument == 30 ? 'selected' : ''}>Distortion Guitar</option>
+<option value="31" ${s.instrument == 31 ? 'selected' : ''}>Guitar Harmonics</option>
+
+<option value="32" ${s.instrument == 32 ? 'selected' : ''}>Acoustic Bass</option>
+<option value="33" ${s.instrument == 33 ? 'selected' : ''}>Finger Bass</option>
+<option value="34" ${s.instrument == 34 ? 'selected' : ''}>Picked Bass</option>
+<option value="35" ${s.instrument == 35 ? 'selected' : ''}>Fretless Bass</option>
+<option value="36" ${s.instrument == 36 ? 'selected' : ''}>Slap Bass 1</option>
+<option value="37" ${s.instrument == 37 ? 'selected' : ''}>Slap Bass 2</option>
+<option value="38" ${s.instrument == 38 ? 'selected' : ''}>Synth Bass 1</option>
+<option value="39" ${s.instrument == 39 ? 'selected' : ''}>Synth Bass 2</option>
+
+<option value="40" ${s.instrument == 40 ? 'selected' : ''}>Violin</option>
+<option value="41" ${s.instrument == 41 ? 'selected' : ''}>Viola</option>
+<option value="42" ${s.instrument == 42 ? 'selected' : ''}>Cello</option>
+<option value="43" ${s.instrument == 43 ? 'selected' : ''}>Contrabass</option>
+<option value="44" ${s.instrument == 44 ? 'selected' : ''}>Tremolo Strings</option>
+<option value="45" ${s.instrument == 45 ? 'selected' : ''}>Pizzicato Strings</option>
+<option value="46" ${s.instrument == 46 ? 'selected' : ''}>Orchestral Harp</option>
+<option value="47" ${s.instrument == 47 ? 'selected' : ''}>Timpani</option>
+
+<option value="48" ${s.instrument == 48 ? 'selected' : ''}>Strings Ensemble 1</option>
+<option value="49" ${s.instrument == 49 ? 'selected' : ''}>Strings Ensemble 2</option>
+<option value="50" ${s.instrument == 50 ? 'selected' : ''}>Synth Strings 1</option>
+<option value="51" ${s.instrument == 51 ? 'selected' : ''}>Synth Strings 2</option>
+<option value="52" ${s.instrument == 52 ? 'selected' : ''}>Choir Aahs</option>
+<option value="53" ${s.instrument == 53 ? 'selected' : ''}>Voice Oohs</option>
+<option value="54" ${s.instrument == 54 ? 'selected' : ''}>Synth Choir</option>
+<option value="55" ${s.instrument == 55 ? 'selected' : ''}>Orchestra Hit</option>
+
+<option value="56" ${s.instrument == 56 ? 'selected' : ''}>Trumpet</option>
+<option value="57" ${s.instrument == 57 ? 'selected' : ''}>Trombone</option>
+<option value="58" ${s.instrument == 58 ? 'selected' : ''}>Tuba</option>
+<option value="59" ${s.instrument == 59 ? 'selected' : ''}>Muted Trumpet</option>
+<option value="60" ${s.instrument == 60 ? 'selected' : ''}>French Horn</option>
+<option value="61" ${s.instrument == 61 ? 'selected' : ''}>Brass Section</option>
+<option value="62" ${s.instrument == 62 ? 'selected' : ''}>Synth Brass 1</option>
+<option value="63" ${s.instrument == 63 ? 'selected' : ''}>Synth Brass 2</option>
+
+<option value="64" ${s.instrument == 64 ? 'selected' : ''}>Soprano Sax</option>
+<option value="65" ${s.instrument == 65 ? 'selected' : ''}>Alto Sax</option>
+<option value="66" ${s.instrument == 66 ? 'selected' : ''}>Tenor Sax</option>
+<option value="67" ${s.instrument == 67 ? 'selected' : ''}>Baritone Sax</option>
+<option value="68" ${s.instrument == 68 ? 'selected' : ''}>Oboe</option>
+<option value="69" ${s.instrument == 69 ? 'selected' : ''}>English Horn</option>
+<option value="70" ${s.instrument == 70 ? 'selected' : ''}>Bassoon</option>
+<option value="71" ${s.instrument == 71 ? 'selected' : ''}>Clarinet</option>
+
+<option value="72" ${s.instrument == 72 ? 'selected' : ''}>Piccolo</option>
+<option value="73" ${s.instrument == 73 ? 'selected' : ''}>Flute</option>
+<option value="74" ${s.instrument == 74 ? 'selected' : ''}>Recorder</option>
+<option value="75" ${s.instrument == 75 ? 'selected' : ''}>Pan Flute</option>
+<option value="76" ${s.instrument == 76 ? 'selected' : ''}>Bottle Blow</option>
+<option value="77" ${s.instrument == 77 ? 'selected' : ''}>Shakuhachi</option>
+<option value="78" ${s.instrument == 78 ? 'selected' : ''}>Whistle</option>
+<option value="79" ${s.instrument == 79 ? 'selected' : ''}>Ocarina</option>
+
+<option value="80" ${s.instrument == 80 ? 'selected' : ''}>Lead Square</option>
+<option value="81" ${s.instrument == 81 ? 'selected' : ''}>Lead Sawtooth</option>
+<option value="82" ${s.instrument == 82 ? 'selected' : ''}>Lead Calliope</option>
+<option value="83" ${s.instrument == 83 ? 'selected' : ''}>Lead Chiff</option>
+<option value="84" ${s.instrument == 84 ? 'selected' : ''}>Lead Charang</option>
+<option value="85" ${s.instrument == 85 ? 'selected' : ''}>Lead Voice</option>
+<option value="86" ${s.instrument == 86 ? 'selected' : ''}>Lead Fifths</option>
+<option value="87" ${s.instrument == 87 ? 'selected' : ''}>Lead Bass+Lead</option>
+
+<option value="88" ${s.instrument == 88 ? 'selected' : ''}>Pad New Age</option>
+<option value="89" ${s.instrument == 89 ? 'selected' : ''}>Pad Warm</option>
+<option value="90" ${s.instrument == 90 ? 'selected' : ''}>Pad Polysynth</option>
+<option value="91" ${s.instrument == 91 ? 'selected' : ''}>Pad Choir</option>
+<option value="92" ${s.instrument == 92 ? 'selected' : ''}>Pad Bowed</option>
+<option value="93" ${s.instrument == 93 ? 'selected' : ''}>Pad Metallic</option>
+<option value="94" ${s.instrument == 94 ? 'selected' : ''}>Pad Halo</option>
+<option value="95" ${s.instrument == 95 ? 'selected' : ''}>Pad Sweep</option>
+
+<option value="96" ${s.instrument == 96 ? 'selected' : ''}>FX Rain</option>
+<option value="97" ${s.instrument == 97 ? 'selected' : ''}>FX Soundtrack</option>
+<option value="98" ${s.instrument == 98 ? 'selected' : ''}>FX Crystal</option>
+<option value="99" ${s.instrument == 99 ? 'selected' : ''}>FX Atmosphere</option>
+<option value="100" ${s.instrument == 100 ? 'selected' : ''}>FX Brightness</option>
+<option value="101" ${s.instrument == 101 ? 'selected' : ''}>FX Goblins</option>
+<option value="102" ${s.instrument == 102 ? 'selected' : ''}>FX Echoes</option>
+<option value="103" ${s.instrument == 103 ? 'selected' : ''}>FX Sci-Fi</option>
+
+<option value="104" ${s.instrument == 104 ? 'selected' : ''}>Sitar</option>
+<option value="105" ${s.instrument == 105 ? 'selected' : ''}>Banjo</option>
+<option value="106" ${s.instrument == 106 ? 'selected' : ''}>Shamisen</option>
+<option value="107" ${s.instrument == 107 ? 'selected' : ''}>Koto</option>
+<option value="108" ${s.instrument == 108 ? 'selected' : ''}>Kalimba</option>
+<option value="109" ${s.instrument == 109 ? 'selected' : ''}>Bagpipe</option>
+<option value="110" ${s.instrument == 110 ? 'selected' : ''}>Fiddle</option>
+<option value="111" ${s.instrument == 111 ? 'selected' : ''}>Shanai</option>
+
+<option value="112" ${s.instrument == 112 ? 'selected' : ''}>Tinkle Bell</option>
+<option value="113" ${s.instrument == 113 ? 'selected' : ''}>Agogo</option>
+<option value="114" ${s.instrument == 114 ? 'selected' : ''}>Steel Drums</option>
+<option value="115" ${s.instrument == 115 ? 'selected' : ''}>Woodblock</option>
+<option value="116" ${s.instrument == 116 ? 'selected' : ''}>Taiko Drum</option>
+<option value="117" ${s.instrument == 117 ? 'selected' : ''}>Melodic Tom</option>
+<option value="118" ${s.instrument == 118 ? 'selected' : ''}>Synth Drum</option>
+<option value="119" ${s.instrument == 119 ? 'selected' : ''}>Reverse Cymbal</option>
+
+<option value="120" ${s.instrument == 120 ? 'selected' : ''}>Guitar Fret Noise</option>
+<option value="121" ${s.instrument == 121 ? 'selected' : ''}>Breath Noise</option>
+<option value="122" ${s.instrument == 122 ? 'selected' : ''}>Seashore</option>
+<option value="123" ${s.instrument == 123 ? 'selected' : ''}>Bird Tweet</option>
+<option value="124" ${s.instrument == 124 ? 'selected' : ''}>Telephone Ring</option>
+<option value="125" ${s.instrument == 125 ? 'selected' : ''}>Helicopter</option>
+<option value="126" ${s.instrument == 126 ? 'selected' : ''}>Applause</option>
+<option value="127" ${s.instrument == 127 ? 'selected' : ''}>Gunshot</option>
+
+</select>
+
+<input
+type="number"
+step="0.1"
+min="0"
+max="3"
+class="mapping-input"
+style="width: 60px;"
+value="${s.volume || 1}"
+onchange="updateMapping('${manual}', ${i}, 'volume', this.value)"
+title="Volume"
+>
+
+<input
+type="number"
+class="mapping-input"
+style="width: 60px;"
+value="${s.octave || 0}"
+onchange="updateMapping('${manual}', ${i}, 'octave', this.value)"
+title="Octave"
+>
             </div>`;
         });
         
@@ -454,18 +890,38 @@ window.setTriState = function(val, targetState, type) {
     buildSettingsUI(); 
 };
 
-window.updateMapping = function(manualKey, index, type, newVal) {
-    if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
-    if (type === 'name') organStructure[manualKey][index].name = newVal;
-    buildSettingsUI(); buildEditorUI();
-    if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
-};
+window.updateMapping = function(manual, index, field, value) {
 
-window.updateExpMapping = function(type, newVal) {
-    if (type === 'swell') swellCC = parseInt(newVal);
-    if (type === 'perc') percCC = parseInt(newVal);
-    buildSettingsUI(); buildEditorUI();
-    if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
+    if (field === 'val') {
+        organStructure[manual][index][field] = parseInt(value);
+    }
+
+    else if (field === 'instrument') {
+        organStructure[manual][index][field] = parseInt(value);
+    }
+
+    else if (field === 'octave') {
+        organStructure[manual][index][field] = parseInt(value);
+    }
+
+    else if (field === 'volume') {
+        organStructure[manual][index][field] = parseFloat(value);
+    }
+
+    else {
+        organStructure[manual][index][field] = value;
+    }
+
+    buildSettingsUI();
+    buildEditorUI();
+
+    if(currentMidi) {
+        syncSwitchesToTimeline(
+            document.getElementById('tick-slider').value
+        );
+
+        renderLog();
+    }
 };
 
 function buildEditorUI() {
