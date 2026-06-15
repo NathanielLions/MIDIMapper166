@@ -1491,7 +1491,30 @@ function draw() {
     const canvas = document.getElementById('piano-roll'); if (canvas.offsetParent === null) return; 
     const ctx = canvas.getContext('2d'); const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr);
-    ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#111' : '#1a1a1a';
+    let noteColor;
+
+if (
+    track.channel === 3 &&
+    note.midi >= 36 &&
+    note.midi <= 48
+) {
+    noteColor = "#e74c3c";
+}
+
+else if (
+    track.channel === 3 &&
+    note.midi >= 65 &&
+    note.midi <= 96
+) {
+    noteColor = "#3498db";
+}
+
+else {
+    noteColor =
+        channelColors[track.channel % 16];
+}
+
+ctx.fillStyle = noteColor;
     ctx.fillRect(0, 0, rect.width, rect.height);
     const sliderMax = parseInt(document.getElementById('tick-slider').max); const currentTick = parseInt(document.getElementById('tick-slider').value);
     const zoom = parseFloat(document.getElementById('zoom-slider').value); const windowTicks = sliderMax / zoom;
