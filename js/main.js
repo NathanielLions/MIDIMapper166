@@ -55,7 +55,15 @@ function stopPlayback() {
 
 function killAllNotes() {
     if (synth) {
-        synth.stopAllChannels();
+        for (let ch = 0; ch < 16; ch++) {
+
+    synth.send([
+        0xB0 + ch,
+        123,
+        0
+    ]);
+
+};
     }
 
     scheduledNotes.clear();
@@ -1496,7 +1504,7 @@ function draw() {
         let noteColor;
 
 if (
-    track.channel === 3 &&
+    note.channel === 3 &&
     note.midi >= 36 &&
     note.midi <= 48
 ) {
@@ -1505,7 +1513,7 @@ if (
 }
 
 else if (
-    track.channel === 3 &&
+    note.channel === 3 &&
     note.midi >= 65 &&
     note.midi <= 96
 ) {
