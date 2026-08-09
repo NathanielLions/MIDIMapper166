@@ -145,18 +145,26 @@ function getActiveStopsForNote(channel, midiNote) {
     return activeStops;
 }
 
-function scheduleNotePlay(note, channel, delaySeconds) {
+function getInstrumentForStop(stop) {
+    if (
+        tremulantActive &&
+        stop.tremulantInstrument !== undefined &&
+        stop.tremulantInstrument !== null
+    ) {
+        return stop.tremulantInstrument;
+    }
 
-    let activeStops =
-    getActiveStopsForNote(channel, note.midi);
+    return stop.instrument || 0;
+}
+
+function scheduleNotePlay(note, channel, delaySeconds) {
+    const activeStops = getActiveStopsForNote(channel, note.midi);
 
     setTimeout(() => {
-
         activeStops.forEach(stop => {
+            const finalMidi = note.midi + (stop.octave || 0);
 
-            let finalMidi = note.midi + (stop.octave || 0);
-
-            let velocity = Math.min(
+            const velocity = Math.min(
                 127,
                 Math.floor(
                     ((note.velocity || 1) * 127) *
@@ -164,9 +172,11 @@ function scheduleNotePlay(note, channel, delaySeconds) {
                 )
             );
 
+            const program = getInstrumentForStop(stop);
+
             synth.send([
                 0xC0 + channel,
-                stop.instrument || 0
+                program
             ]);
 
             synth.send([
@@ -176,20 +186,15 @@ function scheduleNotePlay(note, channel, delaySeconds) {
             ]);
 
             setTimeout(() => {
-
                 synth.send([
                     0x80 + channel,
                     finalMidi,
                     0
                 ]);
-
             }, note.duration * 1000);
-
         });
-
     }, delaySeconds * 1000);
 }
-
 // ==========================================
 // TIME & DISPLAY ENGINE
 // ==========================================
@@ -272,53 +277,53 @@ const DEFAULT_ORGAN_STRUCTURE = {
             val: 70,
             name: "Open Flute",
             visible: true,
-            instrument: 73,
+            instrument: 70,
             octave: 0,
             volume: 1.0
         },
 
         {
-            val: 11,
+            val: 18,
             name: "Stopped Flute",
             visible: true,
-            instrument: 73,
-            octave: -12,
-            volume: 0.8
+            instrument: 18,
+            octave: 0,
+            volume: 1.0
         },
 
         {
-            val: 48,
+            val: 42,
             name: "Strings 8",
             visible: true,
-            instrument: 40,
+            instrument: 42,
             octave: 0,
-            volume: 0.9
+            volume: 1.0
         },
 
         {
-            val: 88,
+            val: 41,
             name: "Strings 4",
             visible: true,
-            instrument: 40,
+            instrument: 41,
             octave: 12,
-            volume: 0.9
+            volume: 1.0
+        },
+
+        {
+            val: 17,
+            name: "Octave",
+            visible: true,
+            instrument: 17,
+            octave: 12,
+            volume: 1.0
         }
     ],
 
     "Trumpetmelody (Ch 3)": [
 
         {
-            val: 68,
-            name: "Baritone",
-            visible: true,
-            instrument: 57,
-            octave: -12,
-            volume: 1.0
-        },
-
-        {
             val: 56,
-            name: "Trumpet",
+            name: "Wooden Trumpet",
             visible: true,
             instrument: 56,
             octave: 0,
@@ -326,19 +331,28 @@ const DEFAULT_ORGAN_STRUCTURE = {
         },
 
         {
-            val: 61,
-            name: "Horn",
+            val: 68,
+            name: "Baritone",
             visible: true,
-            instrument: 60,
+            instrument: 68,
             octave: 0,
-            volume: 0.9
+            volume: 1.0
         },
 
         {
-            val: 42,
+            val: 57,
+            name: "Brass Trumpet",
+            visible: true,
+            instrument: 57,
+            octave: 0,
+            volume: 1.0
+        },
+
+        {
+            val: 44,
             name: "Cello",
             visible: true,
-            instrument: 42,
+            instrument: 44,
             octave: -12,
             volume: 1.0
         }
@@ -347,46 +361,30 @@ const DEFAULT_ORGAN_STRUCTURE = {
     "Countermelody (Ch 4)": [
 
         {
-            val: 8,
-            name: "Glockenspiel",
+            val: 20,
+            name: "Tibia",
             visible: true,
-            instrument: 14,
-            octave: 24,
+            instrument: 20,
+            tremulantInstrument: 22,
+            octave: 0,
             volume: 1.0
         },
 
         {
-            val: 10,
-            name: "Unaphone",
-            visible: true,
-            instrument: 11,
-            octave: 12,
-            volume: 0.9
-        },
-
-        {
             val: 19,
-            name: "Prestant",
+            name: "Bourdon",
             visible: true,
-            instrument: 41,
-            octave: 0,
-            volume: 0.9
+            instrument: 19,
+            tremulantInstrument: 21,
+            octave: -12,
+            volume: 1.0
         },
 
         {
-            val: 20,
-            name: "Celeste",
+            val: 82,
+            name: "Soft Violin",
             visible: true,
-            instrument: 41,
-            octave: 12,
-            volume: 0.7
-        },
-
-        {
-            val: 71,
-            name: "Clarinet",
-            visible: true,
-            instrument: 71,
+            instrument: 82,
             octave: 0,
             volume: 1.0
         },
@@ -397,15 +395,35 @@ const DEFAULT_ORGAN_STRUCTURE = {
             visible: true,
             instrument: 40,
             octave: 0,
-            volume: 1.2
+            volume: 1.0
+        },
+
+        {
+            val: 72,
+            name: "Clarinet",
+            visible: true,
+            instrument: 72,
+            octave: 0,
+            volume: 1.0
         },
 
         {
             val: 73,
-            name: "Piccolo",
+            name: "Flute",
             visible: true,
-            instrument: 72,
-            octave: 12,
+            instrument: 73,
+            tremulantInstrument: 77,
+            octave: 0,
+            volume: 1.0
+        },
+
+        {
+            val: 49,
+            name: "Undamaris",
+            visible: true,
+            instrument: 49,
+            tremulantInstrument: 79,
+            octave: 0,
             volume: 1.0
         },
 
@@ -413,75 +431,102 @@ const DEFAULT_ORGAN_STRUCTURE = {
             val: 75,
             name: "Flageolet",
             visible: true,
-            instrument: 73,
-            octave: 12,
-            volume: 0.8
-        },
-
-        {
-            val: 82,
-            name: "Soft Violin",
-            visible: true,
-            instrument: 40,
-            octave: 0,
-            volume: 0.6
-        },
-
-        {
-            val: 83,
-            name: "Tibia",
-            visible: true,
-            instrument: 15,
+            instrument: 75,
+            tremulantInstrument: 78,
             octave: 12,
             volume: 1.0
         },
 
         {
-            val: 86,
-            name: "Bourdon",
+            val: 74,
+            name: "Piccolo",
             visible: true,
-            instrument: 15,
-            octave: 0,
+            instrument: 74,
+            tremulantInstrument: 76,
+            octave: 12,
             volume: 1.0
-        },
-
-        {
-            val: 87,
-            name: "Flute",
-            visible: true,
-            instrument: 73,
-            octave: 0,
-            volume: 0.8
-        }
-    ],
-
-    "Bass (Ch 4)": [
-
-        {
-            val: 57,
-            name: "Trombone",
-            visible: true,
-            instrument: 57,
-            octave: -12,
-            volume: 1.1
         },
 
         {
             val: 50,
-            name: "Tuba",
+            name: "Prestant",
             visible: true,
-            instrument: 58,
-            octave: -12,
-            volume: 1.2
+            instrument: 50,
+            octave: 0,
+            volume: 1.0
         },
 
         {
-            val: 58,
-            name: "Bass Flute",
+            val: 46,
+            name: "Celeste",
             visible: true,
-            instrument: 73,
+            instrument: 46,
+            octave: 12,
+            volume: 1.0
+        },
+
+        {
+            val: 8,
+            name: "Bells",
+            visible: true,
+            instrument: 8,
+            octave: 24,
+            volume: 1.0
+        },
+
+        {
+            val: 9,
+            name: "Unaphone",
+            visible: true,
+            instrument: 9,
+            octave: 12,
+            volume: 1.0
+        },
+
+        {
+            val: 14,
+            name: "Xylophone",
+            visible: true,
+            instrument: 14,
+            octave: 0,
+            volume: 1.0
+        },
+
+       "Bass (Ch 4)": [
+        {
+            val: 58,
+            name: "Bass Flutes",
+            visible: true,
+            instrument: 58,
             octave: -12,
-            volume: 0.8
+            volume: 1.0
+        },
+
+        {
+            val: 43,
+            name: "Trombone",
+            visible: true,
+            instrument: 43,
+            octave: -12,
+            volume: 1.0
+        },
+
+        {
+            val: 62,
+            name: "Tuba",
+            visible: true,
+            instrument: 62,
+            octave: -12,
+            volume: 1.0
+        },
+
+        {
+            val: 59,
+            name: "Diaphone",
+            visible: true,
+            instrument: 59,
+            octave: -12,
+            volume: 1.0
         }
     ]
 };
@@ -498,6 +543,9 @@ const DEFAULT_PISTONS = [
 
 let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
+
+let tremulantActive = false;
+
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
 let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
 
@@ -519,6 +567,8 @@ window.resetToDefaults = function() {
     if (confirm("⚠️ Are you sure you want to restore the default Wurlitzer 166 settings? \n\nThis will erase any custom stops, remappings, and piston modifications you have made!")) {
         swellCC = DEFAULT_SWELL_CC;
         percCC = DEFAULT_PERC_CC;
+        tremulantActive = false;
+
         organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
         pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
         editingPistonIndex = 0;
@@ -800,10 +850,30 @@ title="Octave"
     }
     
     globalHtml += `<div style="border-left: 3px solid #8e44ad; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:10px;">
-        <h4 style="margin: 5px 0; color: #8e44ad; font-size: 0.85em;">Expression</h4>
-        <div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${swellCC}" onchange="updateExpMapping('swell', this.value)"><span style="font-size:0.8em;">Swell</span></div>
-        <div style="display:flex; align-items:center; gap: 5px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${percCC}" onchange="updateExpMapping('perc', this.value)"><span style="font-size:0.8em;">Percussion</span></div>
-    </div></div></div>`;
+    <h4 style="margin: 5px 0; color: #8e44ad; font-size: 0.85em;">Expression & Percussion</h4>
+
+    <div style="display:flex; align-items:center; gap:5px; margin-bottom:3px;">
+        <input
+            type="number"
+            class="mapping-input"
+            style="width:40px; padding:2px;"
+            value="${swellCC}"
+            onchange="updateExpMapping('swell', this.value)"
+        >
+        <span style="font-size:0.8em;">Swell</span>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:5px; margin-bottom:3px;">
+        <input
+            type="number"
+            class="mapping-input"
+            style="width:40px; padding:2px;"
+            value="${percCC}"
+            onchange="updateExpMapping('perc', this.value)"
+        >
+        <span style="font-size:0.8em;">Percussion</span>
+    </div>
+</div></div></div>`;
     
     container.innerHTML += globalHtml;
 
@@ -948,9 +1018,87 @@ function buildEditorUI() {
         else if (shortMan === "Bass") { document.getElementById('col-bass-exp').appendChild(groupDiv); }
     }
 
-    const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
-    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion Master <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion Master', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
-    document.getElementById('col-bass-exp').appendChild(expDiv);
+   const expDiv = document.createElement('div');
+expDiv.className = 'manual-group';
+expDiv.style.borderLeftColor = "#8e44ad";
+
+expDiv.innerHTML = `
+    <h4 style="color: #8e44ad;">Expression & Percussion</h4>
+
+    <div class="stop-grid">
+
+        <div class="stop-row">
+            <span
+                class="stop-name"
+                style="color: #8e44ad;"
+            >
+                Swell Shutters
+                <span
+                    class="midi-val"
+                    style="color: #7f8c8d; font-weight: normal;"
+                >
+                    (CC ${swellCC})
+                </span>
+            </span>
+
+            <label class="switch">
+                <input
+                    type="checkbox"
+                    id="swell-switch"
+                    onchange="handleSwellToggle(this.checked)"
+                >
+                <span class="slider-switch swell-bg"></span>
+            </label>
+        </div>
+
+        <div class="stop-row">
+            <span class="stop-name">
+                Percussion Master
+                <span
+                    class="midi-val"
+                    style="color: #7f8c8d; font-weight: normal;"
+                >
+                    (CC ${percCC})
+                </span>
+            </span>
+
+            <label class="switch">
+                <input
+                    type="checkbox"
+                    id="stop-${percCC}"
+                    onchange="handleStopToggle(
+                        ${percCC},
+                        'Percussion Master',
+                        'Perc',
+                        this.checked
+                    )"
+                >
+                <span class="slider-switch"></span>
+            </label>
+        </div>
+
+      <div class="stop-row">
+    <span
+        class="stop-name"
+        style="color: #8e44ad;"
+    >
+        Tremulant
+    </span>
+
+    <label class="switch">
+        <input
+            type="checkbox"
+            id="tremulant-switch"
+            onchange="handleTremulantToggle(this.checked)"
+        >
+        <span class="slider-switch swell-bg"></span>
+    </label>
+</div>
+
+    </div>
+`;
+
+document.getElementById('col-bass-exp').appendChild(expDiv);
 
     let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
     pistons.forEach((p, i) => {
@@ -1323,8 +1471,37 @@ function nudge(amount) {
     if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(newVal); startTimeMs = performance.now(); }
 }
 
-window.handleSwellToggle = function(isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); };
-window.handleStopToggle = function(val, name, manual, isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(81, val, `${name} ON`, manual); else addEvent(80, val, `${name} OFF`, manual); };
+window.handleSwellToggle = function(isChecked) {
+    if (isUpdatingSwitches) return;
+
+    if (isChecked) {
+        addEvent(swellCC, 127, 'Swell OPEN', 'Exp');
+    } else {
+        addEvent(swellCC, 64, 'Swell CLOSED', 'Exp');
+    }
+};
+
+window.handleTremulantToggle = function(isChecked) {
+    if (isUpdatingSwitches) return;
+
+    tremulantActive = isChecked;
+
+    // Stop currently sounding notes so the next notes
+    // immediately use the correct Tremulant instrument.
+    if (isPlaying) {
+        killAllNotes();
+    }
+};
+
+window.handleStopToggle = function(val, name, manual, isChecked) {
+    if (isUpdatingSwitches) return;
+
+    if (isChecked) {
+        addEvent(81, val, `${name} ON`, manual);
+    } else {
+        addEvent(80, val, `${name} OFF`, manual);
+    }
+};
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); tbody.innerHTML = '';
@@ -1392,14 +1569,69 @@ window.applyRegistrationState = function(pistonIndex) {
 
 function addEvent(cc, val, label, manual) {
     if (!currentMidi) return;
-    let baseTick = parseInt(document.getElementById('tick-slider').value);
+
+    let baseTick = parseInt(
+        document.getElementById('tick-slider').value
+    );
+
     let track = getOrCreateSystemTrack();
-    
-    [swellCC, 80, 81].forEach(checkCc => { if (track.controlChanges[checkCc]) track.controlChanges[checkCc] = track.controlChanges[checkCc].filter(e => !( ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val)) && Math.abs(e.ticks - baseTick) <= 10)); });
-    if (!track.controlChanges[cc]) track.controlChanges[cc] = [];
-    let safeTick = baseTick; while (track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
-    track.controlChanges[cc].push({ ticks: safeTick, number: cc, value: val / 127, time: currentMidi.header.ticksToSeconds(safeTick) });
-    track.controlChanges[cc].sort((a, b) => a.ticks - b.ticks); renderLog(); draw(); 
+
+    const systemCCs = [
+    swellCC,
+    80,
+    81
+];
+
+    systemCCs.forEach(checkCc => {
+
+        if (!track.controlChanges[checkCc]) return;
+
+        track.controlChanges[checkCc] =
+            track.controlChanges[checkCc].filter(e => {
+
+                const sameSwell =
+                    cc === swellCC &&
+                    checkCc === swellCC;
+
+                const sameStopValue =
+                    (cc === 80 || cc === 81) &&
+                    (checkCc === 80 || checkCc === 81) &&
+                    Math.round(e.value * 127) === val;
+
+                return !(
+    (sameSwell || sameStopValue) &&
+    Math.abs(e.ticks - baseTick) <= 10
+);
+            });
+    });
+
+    if (!track.controlChanges[cc]) {
+        track.controlChanges[cc] = [];
+    }
+
+    let safeTick = baseTick;
+
+    while (
+        track.controlChanges[cc].some(
+            e => e.ticks === safeTick
+        )
+    ) {
+        safeTick++;
+    }
+
+    track.controlChanges[cc].push({
+        ticks: safeTick,
+        number: cc,
+        value: val / 127,
+        time: currentMidi.header.ticksToSeconds(safeTick)
+    });
+
+    track.controlChanges[cc].sort(
+        (a, b) => a.ticks - b.ticks
+    );
+
+    renderLog();
+    draw();
 }
 
 window.removeEvent = function(cc, val, tick) {
@@ -1423,8 +1655,13 @@ function syncSwitchesToTimeline(currentTick) {
         if (cb) cb.checked = !!stopStates[s.val]; 
     });
     let pc = document.getElementById(`stop-${percCC}`); if (pc) pc.checked = !!stopStates[percCC];
-    let sw = document.getElementById('swell-switch'); if (sw) sw.checked = swellState;
-    isUpdatingSwitches = false; 
+    let sw = document.getElementById('swell-switch');
+if (sw) sw.checked = swellState;
+
+let trem = document.getElementById('tremulant-switch');
+if (trem) trem.checked = tremulantActive;
+
+isUpdatingSwitches = false;
 }
 
 function draw() {
