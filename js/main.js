@@ -337,19 +337,19 @@ const DEFAULT_ORGAN_STRUCTURE = {
     "Trumpetmelody (Ch 3)": [
 
         {
-            val: 56,
-            name: "Wooden Trumpet",
+            val: 68,
+            name: "Baritone",
             visible: true,
-            instrument: 56,
+            instrument: 68,
             octave: 0,
             volume: 1.0
         },
 
         {
-            val: 68,
-            name: "Baritone",
+            val: 56,
+            name: "Wooden Trumpet",
             visible: true,
-            instrument: 68,
+            instrument: 56,
             octave: 0,
             volume: 1.0
         },
@@ -1026,31 +1026,35 @@ window.updateMapping = function(manual, index, field, value) {
 };
 
 function updateTremulantVisuals() {
-    const tremulantSwitch =
-        document.getElementById('tremulant-switch');
+    const tremulantSwitch = document.getElementById('tremulant-switch');
 
     if (tremulantSwitch) {
         tremulantSwitch.checked = tremulantActive;
+
+        const tremSlider =
+            tremulantSwitch.parentElement.querySelector('.slider-switch');
+
+        if (tremSlider) {
+            tremSlider.style.backgroundColor =
+                tremulantActive ? '#2ecc71' : '#e74c3c';
+        }
     }
 
-    document.querySelectorAll('[data-tremulant-stop="true"]').forEach(row => {
+    document.querySelectorAll('.stop-row[data-tremulant-stop="true"]').forEach(row => {
+        const checkbox = row.querySelector('input[type="checkbox"]');
         const slider = row.querySelector('.slider-switch');
 
-        if (tremulantActive) {
-            // Tremulant ON: make the row and switch lighter
-            row.style.backgroundColor = 'rgba(255, 255, 255, 0.10)';
+        if (!checkbox || !slider) return;
 
-            if (slider) {
-                slider.style.backgroundColor = '#e8e8e8';
-            }
-        } else {
-            // Tremulant OFF: restore the original appearance
-            row.style.backgroundColor = '';
+        // These stops are visually lighter ONLY when Tremulant is active.
+        row.style.backgroundColor = tremulantActive
+            ? 'rgba(255, 255, 255, 0.10)'
+            : '';
 
-            if (slider) {
-                slider.style.backgroundColor = '';
-            }
-        }
+        // The switch itself must still show its actual ON/OFF state.
+        slider.style.backgroundColor = checkbox.checked
+            ? '#2ecc71'
+            : (tremulantActive ? '#d6d6d6' : '#e74c3c');
     });
 }
 
@@ -1128,7 +1132,14 @@ if (isTremulantStop) {
                         )"
                     >
 
-                    <span class="slider-switch"></span>
+                    <span
+                        class="slider-switch"
+                        style="${
+                            shortMan === 'Countermelody'
+                            ? 'background-color: #b5b5b5;'
+                             : ''
+    }"
+></span>
                 </label>
             `;
 
@@ -1404,7 +1415,11 @@ window.onload = () => {
 document.getElementById('midi-upload').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
-    currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
+    currentMidi = new Midi(arrayBuffer);
+    ppq = currentMidi.header.ppq || 384;
+
+    // Start initializing the audio engine as soon as the MIDI is loaded.
+    initAudio();
     
     let systemTrack = getSystemTrack();
     
@@ -1648,10 +1663,18 @@ function finalizeImport() {
     document.getElementById('zoom-slider').disabled = false; 
     
     updateDisplays(0);
-    document.getElementById('export-btn').style.display = 'block'; 
-    renderLog(); 
-    syncSwitchesToTimeline(0); 
-    openTab('page-editor', document.getElementById('tab-editor'));
+document.getElementById('export-btn').style.display = 'block';
+
+renderLog();
+syncSwitchesToTimeline(0);
+
+// Open the Editor first so the canvas has a real size.
+openTab('page-editor', document.getElementById('tab-editor'));
+
+// Draw the MIDI immediately after the Editor becomes visible.
+requestAnimationFrame(() => {
+    draw();
+});
 }
 
 window.addEventListener('resize', () => { if (currentMidi) draw(); });
@@ -1788,12 +1811,17 @@ window.handleTremulantToggle = function(isChecked) {
     });
 
     tremulantActive = isChecked;
-    updateTremulantVisuals();
-    // Update the visible registration.
-    syncSwitchesToTimeline(baseTick);
 
-    renderLog();
-    draw();
+// Update the visual state immediately.
+updateTremulantVisuals();
+
+// Only reconstruct from the MIDI when there are actual
+// Tremulant registration events at/before this tick.
+// If there are none, preserve the manual Tremulant state.
+syncSwitchesToTimeline(baseTick, isChecked);
+
+renderLog();
+draw();
 
     if (isPlaying) {
         killAllNotes();
@@ -2202,7 +2230,7 @@ window.removeEvent = function(cc, val, tick) {
     renderLog(); syncSwitchesToTimeline(parseInt(document.getElementById('tick-slider').value)); draw();
 };
 
-function syncSwitchesToTimeline(currentTick) {
+function syncSwitchesToTimeline(currentTick, preserveTremulant = false) {
     if (!currentMidi) return;
 
     isUpdatingSwitches = true;
@@ -2282,7 +2310,9 @@ counterStops.forEach(stop => {
      * Tremulant state is reconstructed from the actual
      * Tr... registration events in the MIDI.
      */
+    if (!preserveTremulant) {
     tremulantActive = tremState;
+}
 
     /*
      * Update normal Countermelody switches.
@@ -2332,8 +2362,12 @@ counterStops.forEach(stop => {
     let trem = document.getElementById('tremulant-switch');
 
     if (trem) {
-        trem.checked = tremulantActive;
+    trem.checked = tremulantActive;
     }
+
+    // Immediately update all Tremulant-related visuals
+    // after reconstructing the MIDI state.
+    updateTremulantVisuals();
 
     isUpdatingSwitches = false;
 }
