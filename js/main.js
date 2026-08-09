@@ -1028,14 +1028,18 @@ window.updateMapping = function(manual, index, field, value) {
 function updateTremulantVisuals() {
     const tremulantSwitch = document.getElementById('tremulant-switch');
 
-    // Update the Tremulant switch itself
     if (tremulantSwitch) {
         tremulantSwitch.checked = tremulantActive;
     }
 
-    // Update the visual state of all Tremulant-capable stops
     document.querySelectorAll('.tremulant-stop-row').forEach(row => {
-        row.classList.toggle('tremulant-active', tremulantActive);
+        if (tremulantActive) {
+            row.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+            row.style.filter = 'brightness(1.25)';
+        } else {
+            row.style.backgroundColor = '';
+            row.style.filter = '';
+        }
     });
 }
 
@@ -1590,23 +1594,23 @@ window.applyRoutingAndStart = function() {
 };
 
 window.openTab = function(pageId, tabButton) {
-    // Hide all tab pages
-    document.querySelectorAll('.tab-page').forEach(page => {
-        page.style.display = 'none';
+    // Hide every tab page
+    document.querySelectorAll('.tab-content').forEach(page => {
+        page.classList.remove('active');
     });
 
-    // Remove active state from all tab buttons
-    document.querySelectorAll('.tab-button').forEach(button => {
+    // Remove active state from every tab button
+    document.querySelectorAll('.tab-btn').forEach(button => {
         button.classList.remove('active');
     });
 
-    // Show requested page
+    // Show the selected page
     const page = document.getElementById(pageId);
     if (page) {
-        page.style.display = 'block';
+        page.classList.add('active');
     }
 
-    // Activate clicked tab
+    // Highlight the selected tab
     if (tabButton) {
         tabButton.classList.add('active');
     }
