@@ -1710,8 +1710,9 @@ if (e.cc === 81) {
     label = foundName + " OFF";
     labelColor = "#e74c3c";
 }
-        
-        let displayTime = formatTimeDisplay(e.ticks);
+} // closes the outer "else" from the swell check
+
+let displayTime = formatTimeDisplay(e.ticks);
         
         tbody.innerHTML += `<tr><td><strong>${displayTime}</strong></td><td>${manual}</td><td style="color:${labelColor}"><strong>${label}</strong></td><td><button class="del-btn" onclick="removeEvent(${e.cc}, ${e.val}, ${e.ticks})">X</button></td></tr>`;
     });
