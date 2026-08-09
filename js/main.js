@@ -1025,6 +1025,20 @@ window.updateMapping = function(manual, index, field, value) {
     }
 };
 
+function updateTremulantVisuals() {
+    const tremulantSwitch = document.getElementById('tremulant-switch');
+
+    // Update the Tremulant switch itself
+    if (tremulantSwitch) {
+        tremulantSwitch.checked = tremulantActive;
+    }
+
+    // Update the visual state of all Tremulant-capable stops
+    document.querySelectorAll('.tremulant-stop-row').forEach(row => {
+        row.classList.toggle('tremulant-active', tremulantActive);
+    });
+}
+
 function buildEditorUI() {
     document.getElementById('col-countermelody').innerHTML = '';
     document.getElementById('col-accomp-trumpet').innerHTML = '';
