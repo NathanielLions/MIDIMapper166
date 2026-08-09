@@ -1630,7 +1630,10 @@ function addRegistrationEvent(cc, val, tick) {
 
 
 function getStopStateAtTick(track, val, tick) {
+    if (!track) return false;
+
     let state = false;
+    let events = [];
 
     [80, 81].forEach(cc => {
         if (!track.controlChanges[cc]) return;
@@ -1640,25 +1643,153 @@ function getStopStateAtTick(track, val, tick) {
                 e.ticks <= tick &&
                 Math.round(e.value * 127) === val
             ) {
-                state = cc === 81;
+                events.push({
+                    cc: cc,
+                    ticks: e.ticks
+                });
             }
         });
+    });
+
+    // Process the events in the exact order they occur.
+    events.sort((a, b) => a.ticks - b.ticks);
+
+    events.forEach(e => {
+        state = e.cc === 81;
     });
 
     return state;
 }
 
 
-
 window.handleStopToggle = function(val, name, manual, isChecked) {
     if (isUpdatingSwitches) return;
 
+    const baseTick = parseInt(
+        document.getElementById('tick-slider').value
+    );
+
+    // -----------------------------------------
+    // FIND WHETHER THIS IS A TREMULANT STOP
+    // -----------------------------------------
+
+    const counterStops =
+        organStructure["Countermelody (Ch 4)"] || [];
+
+    const stop = counterStops.find(s => s.val === val);
+
+    const hasTremulant =
+        stop &&
+        stop.tremulantInstrument !== undefined &&
+        stop.tremulantInstrument !== null;
+
+    // -----------------------------------------
+    // TREMULANT COUNTERMELODY STOP
+    // -----------------------------------------
+
+    if (
+        manual === "Countermelody" &&
+        hasTremulant &&
+        tremulantActive
+    ) {
+        const tremVal = stop.tremulantInstrument;
+
+        /*
+         * Remove any conflicting registration event for
+         * BOTH the normal and Tremulant versions at this
+         * exact tick.
+         */
+        removeRegistrationAtTick(80, val, baseTick);
+        removeRegistrationAtTick(81, val, baseTick);
+
+        removeRegistrationAtTick(80, tremVal, baseTick);
+        removeRegistrationAtTick(81, tremVal, baseTick);
+
+        if (isChecked) {
+
+            // -----------------------------------------
+            // STOP ON WHILE TREMULANT IS ACTIVE
+            // -----------------------------------------
+            //
+            // Normal stop must remain OFF.
+            // Tremulant version becomes ON.
+            //
+            // Flute:
+            //     Flute OFF
+            //     TrFlute ON
+            //
+
+            addRegistrationEvent(
+                80,
+                val,
+                baseTick
+            );
+
+            addRegistrationEvent(
+                81,
+                tremVal,
+                baseTick + 1
+            );
+
+        } else {
+
+            // -----------------------------------------
+            // STOP OFF WHILE TREMULANT IS ACTIVE
+            // -----------------------------------------
+            //
+            // Turn the Tremulant version OFF.
+            //
+            // TrFlute OFF
+            //
+
+            addRegistrationEvent(
+                80,
+                tremVal,
+                baseTick
+            );
+        }
+
+        renderLog();
+        syncSwitchesToTimeline(baseTick);
+        draw();
+
+        return;
+    }
+
+    // -----------------------------------------
+    // NORMAL STOP
+    // -----------------------------------------
+
     if (isChecked) {
-        addEvent(81, val, `${name} ON`, manual);
+        addEvent(
+            81,
+            val,
+            `${name} ON`,
+            manual
+        );
     } else {
-        addEvent(80, val, `${name} OFF`, manual);
+        addEvent(
+            80,
+            val,
+            `${name} OFF`,
+            manual
+        );
     }
 };
+
+function removeRegistrationAtTick(cc, val, tick) {
+    const track = getSystemTrack();
+
+    if (!track || !track.controlChanges[cc]) return;
+
+    track.controlChanges[cc] =
+        track.controlChanges[cc].filter(e =>
+            !(
+                e.ticks === tick &&
+                Math.round(e.value * 127) === val
+            )
+        );
+}
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); tbody.innerHTML = '';
@@ -1836,26 +1967,138 @@ window.removeEvent = function(cc, val, tick) {
 
 function syncSwitchesToTimeline(currentTick) {
     if (!currentMidi) return;
-    isUpdatingSwitches = true; 
+
+    isUpdatingSwitches = true;
+
     let track = getSystemTrack();
-    let stopStates = {}; let swellState = false; 
-    if (track) {
-        let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
-        events.sort((a, b) => a.ticks - b.ticks).forEach(e => { if (e.cc === 81) stopStates[e.val] = true; if (e.cc === 80) stopStates[e.val] = false; if (e.cc === swellCC) swellState = (e.val >= 127); });
-    }
-    Object.values(organStructure).flat().forEach(s => { 
-        if (s.visible === false) return;
-        let cb = document.getElementById(`stop-${s.val}`); 
-        if (cb) cb.checked = !!stopStates[s.val]; 
+
+   let stopStates = {};
+let swellState = false;
+
+if (track) {
+    let events = [];
+
+    [swellCC, 80, 81].forEach(cc => {
+        if (!track.controlChanges[cc]) return;
+
+        track.controlChanges[cc].forEach(e => {
+            if (e.ticks <= currentTick) {
+                events.push({
+                    cc: cc,
+                    val: Math.round(e.value * 127),
+                    ticks: e.ticks
+                });
+            }
+        });
     });
-    let pc = document.getElementById(`stop-${percCC}`); if (pc) pc.checked = !!stopStates[percCC];
+
+    // IMPORTANT:
+    // Sort by tick so registration history is reconstructed
+    // in the same order the MIDI events actually occur.
+    events.sort((a, b) => a.ticks - b.ticks);
+
+    events.forEach(e => {
+
+        // -----------------------------------------
+        // NORMAL REGISTRATION EVENTS
+        // -----------------------------------------
+
+        if (e.cc === 81) {
+            stopStates[e.val] = true;
+        }
+
+        if (e.cc === 80) {
+            stopStates[e.val] = false;
+        }
+
+        // -----------------------------------------
+        // SWELL
+        // -----------------------------------------
+
+        if (e.cc === swellCC) {
+            swellState = e.val >= 127;
+        }
+    });
+}
+
+// -----------------------------------------
+// DETERMINE TREMULANT STATE
+// -----------------------------------------
+
+const counterStops =
+    organStructure["Countermelody (Ch 4)"] || [];
+
+let tremState = false;
+
+counterStops.forEach(stop => {
+    if (
+        stop.tremulantInstrument !== undefined &&
+        stop.tremulantInstrument !== null
+    ) {
+        if (stopStates[stop.tremulantInstrument]) {
+            tremState = true;
+        }
+    }
+});
+
+    /*
+     * Tremulant state is reconstructed from the actual
+     * Tr... registration events in the MIDI.
+     */
+    tremulantActive = tremState;
+
+    /*
+     * Update normal Countermelody switches.
+     *
+     * A Tremulant stop being active still means the
+     * corresponding physical stop is ON.
+     */
+    Object.values(organStructure).flat().forEach(s => {
+
+        if (s.visible === false) return;
+
+        let cb = document.getElementById(`stop-${s.val}`);
+
+        if (!cb) return;
+
+        let state = !!stopStates[s.val];
+
+        // Countermelody Tremulant mapping.
+        if (
+            s.tremulantInstrument !== undefined &&
+            s.tremulantInstrument !== null &&
+            tremulantActive
+        ) {
+            state =
+                !!stopStates[s.val] ||
+                !!stopStates[s.tremulantInstrument];
+        }
+
+        cb.checked = state;
+    });
+
+    // Percussion
+    let pc = document.getElementById(`stop-${percCC}`);
+
+    if (pc) {
+        pc.checked = !!stopStates[percCC];
+    }
+
+    // Swell
     let sw = document.getElementById('swell-switch');
-if (sw) sw.checked = swellState;
 
-let trem = document.getElementById('tremulant-switch');
-if (trem) trem.checked = tremulantActive;
+    if (sw) {
+        sw.checked = swellState;
+    }
 
-isUpdatingSwitches = false;
+    // Tremulant
+    let trem = document.getElementById('tremulant-switch');
+
+    if (trem) {
+        trem.checked = tremulantActive;
+    }
+
+    isUpdatingSwitches = false;
 }
 
 function draw() {
