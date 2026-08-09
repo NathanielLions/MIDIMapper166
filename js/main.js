@@ -1575,6 +1575,29 @@ window.applyRoutingAndStart = function() {
     finalizeImport();
 };
 
+window.openTab = function(pageId, tabButton) {
+    // Hide all tab pages
+    document.querySelectorAll('.tab-page').forEach(page => {
+        page.style.display = 'none';
+    });
+
+    // Remove active state from all tab buttons
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+    });
+
+    // Show requested page
+    const page = document.getElementById(pageId);
+    if (page) {
+        page.style.display = 'block';
+    }
+
+    // Activate clicked tab
+    if (tabButton) {
+        tabButton.classList.add('active');
+    }
+};
+
 function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
     currentMidi.tracks.forEach(t => {
