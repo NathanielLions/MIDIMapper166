@@ -55,7 +55,13 @@ function stopPlayback() {
 
 function killAllNotes() {
     if (synth) {
-        synth.stopAllChannels();
+        for (let channel = 0; channel < 16; channel++) {
+            synth.send([
+                0xB0 + channel,
+                123,
+                0
+            ]);
+        }
     }
 
     scheduledNotes.clear();
@@ -267,7 +273,7 @@ const channelColors = [
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
 const DEFAULT_SWELL_CC = 4;
-const DEFAULT_PERC_CC = 12;
+const DEFAULT_PERC_CC = 10;
 
 const DEFAULT_ORGAN_STRUCTURE = {
 
@@ -315,6 +321,15 @@ const DEFAULT_ORGAN_STRUCTURE = {
             visible: true,
             instrument: 17,
             octave: 12,
+            volume: 1.0
+        },
+
+        {
+            val: 45,
+            name: "Strings 16",
+            visible: true,
+            instrument: 45,
+            octave: -12,
             volume: 1.0
         }
     ],
@@ -533,6 +548,15 @@ const DEFAULT_ORGAN_STRUCTURE = {
             visible: true,
             instrument: 59,
             octave: -12,
+            volume: 1.0
+        ,
+
+        {
+            val: 15,
+            name: "Chimes",
+            visible: true,
+            instrument: 15,
+            octave: 0,
             volume: 1.0
         }
     ]
@@ -1007,122 +1031,240 @@ function buildEditorUI() {
     document.getElementById('col-bass-exp').innerHTML = '';
     document.getElementById('col-pistons').innerHTML = '';
 
+    const tremulantStops = [
+        "Tibia",
+        "Bourdon",
+        "Flute",
+        "Undamaris",
+        "Flageolet",
+        "Piccolo"
+    ];
+
     for (const [manual, stops] of Object.entries(organStructure)) {
-        let shortMan = manual.split(' ')[0]; let color = groupColors[shortMan] || "#3498db";
+        let shortMan = manual.split(' ')[0];
+        let color = groupColors[shortMan] || "#3498db";
+
         if (stops.every(s => s.visible === false)) continue;
 
-        const groupDiv = document.createElement('div'); groupDiv.className = 'manual-group'; groupDiv.style.borderLeftColor = color;
-        groupDiv.innerHTML = `<h4 style="color: ${color};">${shortMan} <span class="midi-val" style="color: var(--text-color); font-weight: normal; font-size: 0.8em;">${manual.replace(shortMan, '').trim()}</span></h4><div class="stop-grid"></div>`;
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'manual-group';
+        groupDiv.style.borderLeftColor = color;
+
+        groupDiv.innerHTML = `
+            <h4 style="color: ${color};">
+                ${shortMan}
+                <span class="midi-val"
+                      style="color: var(--text-color); font-weight: normal; font-size: 0.8em;">
+                    ${manual.replace(shortMan, '').trim()}
+                </span>
+            </h4>
+            <div class="stop-grid"></div>
+        `;
+
         const grid = groupDiv.querySelector('.stop-grid');
-        
+
         stops.forEach(s => {
             if (s.visible === false) return;
-            grid.innerHTML += `<div class="stop-row"><span class="stop-name">${s.name} <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${s.val})</span></span><label class="switch"><input type="checkbox" id="stop-${s.val}" onchange="handleStopToggle(${s.val}, '${s.name}', '${shortMan}', this.checked)"><span class="slider-switch"></span></label></div>`;
+
+            const isTremulantStop =
+                shortMan === "Countermelody" &&
+                tremulantStops.includes(s.name);
+
+            const row = document.createElement('div');
+
+            row.className =
+                'stop-row' +
+                (isTremulantStop ? ' tremulant-stop-row' : '');
+
+            row.innerHTML = `
+                <span class="stop-name">
+                    ${s.name}
+                    <span class="midi-val"
+                          style="color: #7f8c8d; font-weight: normal;">
+                        (${s.val})
+                    </span>
+                </span>
+
+                <label class="switch">
+                    <input
+                        type="checkbox"
+                        id="stop-${s.val}"
+                        onchange="handleStopToggle(
+                            ${s.val},
+                            '${s.name}',
+                            '${shortMan}',
+                            this.checked
+                        )"
+                    >
+
+                    <span class="slider-switch"></span>
+                </label>
+            `;
+
+            grid.appendChild(row);
         });
-        
-        if (shortMan === "Countermelody") { document.getElementById('col-countermelody').appendChild(groupDiv); }
-        else if (shortMan === "Accompaniment" || shortMan === "Trumpetmelody") { document.getElementById('col-accomp-trumpet').appendChild(groupDiv); }
-        else if (shortMan === "Bass") { document.getElementById('col-bass-exp').appendChild(groupDiv); }
+
+        if (shortMan === "Countermelody") {
+            document.getElementById('col-countermelody').appendChild(groupDiv);
+        }
+        else if (
+            shortMan === "Accompaniment" ||
+            shortMan === "Trumpetmelody"
+        ) {
+            document.getElementById('col-accomp-trumpet').appendChild(groupDiv);
+        }
+        else if (shortMan === "Bass") {
+            document.getElementById('col-bass-exp').appendChild(groupDiv);
+        }
     }
 
-   const expDiv = document.createElement('div');
-expDiv.className = 'manual-group';
-expDiv.style.borderLeftColor = "#8e44ad";
+    // ==========================================
+    // EXPRESSION & PERCUSSION
+    // ==========================================
 
-expDiv.innerHTML = `
-    <h4 style="color: #8e44ad;">Expression & Percussion</h4>
+    const expDiv = document.createElement('div');
+    expDiv.className = 'manual-group';
+    expDiv.style.borderLeftColor = "#8e44ad";
 
-    <div class="stop-grid">
+    expDiv.innerHTML = `
+        <h4 style="color: #8e44ad;">
+            Expression & Percussion
+        </h4>
 
-        <div class="stop-row">
-            <span
-                class="stop-name"
-                style="color: #8e44ad;"
-            >
-                Swell Shutters
+        <div class="stop-grid">
+
+            <!-- SWELL -->
+            <div class="stop-row">
                 <span
-                    class="midi-val"
-                    style="color: #7f8c8d; font-weight: normal;"
+                    class="stop-name"
+                    style="color: #8e44ad;"
                 >
-                    (CC ${swellCC})
+                    Swell Shutters
+
+                    <span
+                        class="midi-val"
+                        style="color: #7f8c8d; font-weight: normal;"
+                    >
+                        (CC ${swellCC})
+                    </span>
                 </span>
-            </span>
 
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    id="swell-switch"
-                    onchange="handleSwellToggle(this.checked)"
-                >
-                <span class="slider-switch swell-bg"></span>
-            </label>
-        </div>
+                <label class="switch">
+                    <input
+                        type="checkbox"
+                        id="swell-switch"
+                        onchange="handleSwellToggle(this.checked)"
+                    >
+                    <span class="slider-switch swell-bg"></span>
+                </label>
+            </div>
 
-        <div class="stop-row">
-            <span class="stop-name">
-                Percussion Master
+
+            <!-- PERCUSSION -->
+            <div class="stop-row">
+                <span class="stop-name">
+                    Percussion Master
+
+                    <span
+                        class="midi-val"
+                        style="color: #7f8c8d; font-weight: normal;"
+                    >
+                        (CC ${percCC})
+                    </span>
+                </span>
+
+                <label class="switch">
+                    <input
+                        type="checkbox"
+                        id="stop-${percCC}"
+                        onchange="handleStopToggle(
+                            ${percCC},
+                            'Percussion Master',
+                            'Perc',
+                            this.checked
+                        )"
+                    >
+                    <span class="slider-switch percussion-bg"></span>
+                </label>
+            </div>
+
+
+            <!-- TREMULANT -->
+            <div class="stop-row">
                 <span
-                    class="midi-val"
-                    style="color: #7f8c8d; font-weight: normal;"
+                    class="stop-name"
+                    style="color: #8e44ad;"
                 >
-                    (CC ${percCC})
+                    Tremulant
                 </span>
-            </span>
 
-            <label class="switch">
-                <input
-                    type="checkbox"
-                    id="stop-${percCC}"
-                    onchange="handleStopToggle(
-                        ${percCC},
-                        'Percussion Master',
-                        'Perc',
-                        this.checked
-                    )"
-                >
-                <span class="slider-switch"></span>
-            </label>
+                <label class="switch">
+                    <input
+                        type="checkbox"
+                        id="tremulant-switch"
+                        onchange="handleTremulantToggle(this.checked)"
+                    >
+                    <span class="slider-switch tremulant-bg"></span>
+                </label>
+            </div>
+
         </div>
+    `;
 
-      <div class="stop-row">
-    <span
-        class="stop-name"
-        style="color: #8e44ad;"
-    >
-        Tremulant
-    </span>
+    document.getElementById('col-bass-exp').appendChild(expDiv);
+    
+    // ==========================================
+    // SAVED PISTONS
+    // ==========================================
 
-    <label class="switch">
-        <input
-            type="checkbox"
-            id="tremulant-switch"
-            onchange="handleTremulantToggle(this.checked)"
+    let pistonsHtml = `
+        <div
+            class="manual-group"
+            style="border-left-color: #f39c12; flex: 1;"
         >
-        <span class="slider-switch swell-bg"></span>
-    </label>
-</div>
+            <h4 style="color: #f39c12;">
+                Saved Pistons
+            </h4>
 
-    </div>
-`;
+            <div
+                class="stop-grid"
+                style="gap: 5px;"
+            >
+    `;
 
-document.getElementById('col-bass-exp').appendChild(expDiv);
-
-    let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
     pistons.forEach((p, i) => {
-        let extraStyle = i === pistons.length - 1 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
-        pistonsHtml += `<button class="nudge-btn" style="width: 100%; text-align: left; padding: 10px; font-size: 1em; ${extraStyle}" onclick="applyRegistrationState(${i})">${p.name}</button>`;
-    });
-    pistonsHtml += `</div></div>`;
-    document.getElementById('col-pistons').innerHTML = pistonsHtml;
-}
+        let extraStyle =
+            i === pistons.length - 1
+                ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;"
+                : "";
 
-window.openTab = function(tabId, btnElement) {
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    if(btnElement) btnElement.classList.add('active');
-    if (tabId === 'page-editor' && currentMidi) setTimeout(() => draw(), 10);
-};
+        pistonsHtml += `
+            <button
+                class="nudge-btn"
+                style="
+                    width: 100%;
+                    text-align: left;
+                    padding: 10px;
+                    font-size: 1em;
+                    ${extraStyle}
+                "
+                onclick="applyRegistrationState(${i})"
+            >
+                ${p.name}
+            </button>
+        `;
+    });
+
+    pistonsHtml += `
+            </div>
+        </div>
+    `;
+
+    document.getElementById('col-pistons').innerHTML = pistonsHtml;
+
+    // Apply the current Tremulant appearance
+    updateTremulantVisuals();
+}
 
 // ==========================================
 // 3. IMPORT INTERCEPTOR & ROUTING ENGINE
@@ -1592,7 +1734,7 @@ window.handleTremulantToggle = function(isChecked) {
     });
 
     tremulantActive = isChecked;
-
+    updateTremulantVisuals();
     // Update the visible registration.
     syncSwitchesToTimeline(baseTick);
 
