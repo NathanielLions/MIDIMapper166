@@ -483,16 +483,17 @@ const DEFAULT_ORGAN_STRUCTURE = {
             volume: 1.0
         },
 
-        {
+               {
             val: 14,
             name: "Xylophone",
             visible: true,
             instrument: 14,
             octave: 0,
             volume: 1.0
-        },
+        }
+    ],
 
-       "Bass (Ch 4)": [
+    "Bass (Ch 4)": [
         {
             val: 58,
             name: "Bass Flutes",
