@@ -358,140 +358,146 @@ const DEFAULT_ORGAN_STRUCTURE = {
         }
     ],
 
-    "Countermelody (Ch 4)": [
+   "Countermelody (Ch 4)": [
 
-        {
-            val: 20,
-            name: "Tibia",
-            visible: true,
-            instrument: 20,
-            tremulantInstrument: 22,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 20,
+        name: "Tibia",
+        visible: true,
+        instrument: 20,
+        tremulantInstrument: 22,
+        tremulantName: "TrTibia",
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 19,
-            name: "Bourdon",
-            visible: true,
-            instrument: 19,
-            tremulantInstrument: 21,
-            octave: -12,
-            volume: 1.0
-        },
+    {
+        val: 19,
+        name: "Bourdon",
+        visible: true,
+        instrument: 19,
+        tremulantInstrument: 21,
+        tremulantName: "TrBourdon",
+        octave: -12,
+        volume: 1.0
+    },
 
-        {
-            val: 82,
-            name: "Soft Violin",
-            visible: true,
-            instrument: 82,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 82,
+        name: "Soft Violin",
+        visible: true,
+        instrument: 82,
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 40,
-            name: "Forte Violin",
-            visible: true,
-            instrument: 40,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 40,
+        name: "Forte Violin",
+        visible: true,
+        instrument: 40,
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 72,
-            name: "Clarinet",
-            visible: true,
-            instrument: 72,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 72,
+        name: "Clarinet",
+        visible: true,
+        instrument: 72,
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 73,
-            name: "Flute",
-            visible: true,
-            instrument: 73,
-            tremulantInstrument: 77,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 73,
+        name: "Flute",
+        visible: true,
+        instrument: 73,
+        tremulantInstrument: 77,
+        tremulantName: "TrFlute",
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 49,
-            name: "Undamaris",
-            visible: true,
-            instrument: 49,
-            tremulantInstrument: 79,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 49,
+        name: "Undamaris",
+        visible: true,
+        instrument: 49,
+        tremulantInstrument: 79,
+        tremulantName: "TrUndamaris",
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 75,
-            name: "Flageolet",
-            visible: true,
-            instrument: 75,
-            tremulantInstrument: 78,
-            octave: 12,
-            volume: 1.0
-        },
+    {
+        val: 75,
+        name: "Flageolet",
+        visible: true,
+        instrument: 75,
+        tremulantInstrument: 78,
+        tremulantName: "TrFlageolet",
+        octave: 12,
+        volume: 1.0
+    },
 
-        {
-            val: 74,
-            name: "Piccolo",
-            visible: true,
-            instrument: 74,
-            tremulantInstrument: 76,
-            octave: 12,
-            volume: 1.0
-        },
+    {
+        val: 74,
+        name: "Piccolo",
+        visible: true,
+        instrument: 74,
+        tremulantInstrument: 76,
+        tremulantName: "TrPiccolo",
+        octave: 12,
+        volume: 1.0
+    },
 
-        {
-            val: 50,
-            name: "Prestant",
-            visible: true,
-            instrument: 50,
-            octave: 0,
-            volume: 1.0
-        },
+    {
+        val: 50,
+        name: "Prestant",
+        visible: true,
+        instrument: 50,
+        octave: 0,
+        volume: 1.0
+    },
 
-        {
-            val: 46,
-            name: "Celeste",
-            visible: true,
-            instrument: 46,
-            octave: 12,
-            volume: 1.0
-        },
+    {
+        val: 46,
+        name: "Celeste",
+        visible: true,
+        instrument: 46,
+        octave: 12,
+        volume: 1.0
+    },
 
-        {
-            val: 8,
-            name: "Bells",
-            visible: true,
-            instrument: 8,
-            octave: 24,
-            volume: 1.0
-        },
+    {
+        val: 8,
+        name: "Bells",
+        visible: true,
+        instrument: 8,
+        octave: 24,
+        volume: 1.0
+    },
 
-        {
-            val: 9,
-            name: "Unaphone",
-            visible: true,
-            instrument: 9,
-            octave: 12,
-            volume: 1.0
-        },
+    {
+        val: 9,
+        name: "Unaphone",
+        visible: true,
+        instrument: 9,
+        octave: 12,
+        volume: 1.0
+    },
 
-               {
-            val: 14,
-            name: "Xylophone",
-            visible: true,
-            instrument: 14,
-            octave: 0,
-            volume: 1.0
-        }
-    ],
+    {
+        val: 14,
+        name: "Xylophone",
+        visible: true,
+        instrument: 14,
+        octave: 0,
+        volume: 1.0
+    }
+],
 
     "Bass (Ch 4)": [
         {
@@ -1484,15 +1490,165 @@ window.handleSwellToggle = function(isChecked) {
 
 window.handleTremulantToggle = function(isChecked) {
     if (isUpdatingSwitches) return;
+    if (!currentMidi) {
+        tremulantActive = isChecked;
+        return;
+    }
+
+    const baseTick = parseInt(
+        document.getElementById('tick-slider').value
+    );
+
+    const track = getOrCreateSystemTrack();
+
+    // Only Countermelody stops can be Tremulanted.
+    const counterStops = organStructure["Countermelody (Ch 4)"] || [];
+
+    // The six stops that have Tremulant counterparts.
+    const tremStops = counterStops.filter(
+        stop =>
+            stop.tremulantInstrument !== undefined &&
+            stop.tremulantInstrument !== null
+    );
+
+    let offset = 0;
+
+    tremStops.forEach(stop => {
+        const normalVal = stop.val;
+        const tremVal = stop.tremulantInstrument;
+
+        const normalCheckbox =
+            document.getElementById(`stop-${normalVal}`);
+
+        const normalIsOn =
+            normalCheckbox && normalCheckbox.checked;
+
+        if (isChecked) {
+            // -------------------------------
+            // TREMULANT ON
+            // -------------------------------
+            //
+            // Normal stop ON
+            //      ↓
+            // Trem stop ON
+            // Normal stop OFF
+            //
+            // Example:
+            // TrFlute ON
+            // Flute OFF
+
+            if (normalIsOn) {
+                addRegistrationEvent(
+                    81,
+                    tremVal,
+                    baseTick + offset
+                );
+                offset++;
+
+                addRegistrationEvent(
+                    80,
+                    normalVal,
+                    baseTick + offset
+                );
+                offset++;
+            }
+
+        } else {
+            // -------------------------------
+            // TREMULANT OFF
+            // -------------------------------
+            //
+            // Trem stop ON
+            //      ↓
+            // Trem stop OFF
+            // Normal stop ON
+            //
+            // Example:
+            // TrFlute OFF
+            // Flute ON
+
+            const tremIsOn = getStopStateAtTick(
+                track,
+                tremVal,
+                baseTick
+            );
+
+            if (tremIsOn) {
+                addRegistrationEvent(
+                    80,
+                    tremVal,
+                    baseTick + offset
+                );
+                offset++;
+
+                addRegistrationEvent(
+                    81,
+                    normalVal,
+                    baseTick + offset
+                );
+                offset++;
+            }
+        }
+    });
 
     tremulantActive = isChecked;
 
-    // Stop currently sounding notes so the next notes
-    // immediately use the correct Tremulant instrument.
+    // Update the visible registration.
+    syncSwitchesToTimeline(baseTick);
+
+    renderLog();
+    draw();
+
     if (isPlaying) {
         killAllNotes();
+        startMidiSeconds =
+            currentMidi.header.ticksToSeconds(baseTick);
+        startTimeMs = performance.now();
     }
 };
+
+function addRegistrationEvent(cc, val, tick) {
+    if (!currentMidi) return;
+
+    const track = getOrCreateSystemTrack();
+
+    if (!track.controlChanges[cc]) {
+        track.controlChanges[cc] = [];
+    }
+
+    track.controlChanges[cc].push({
+        ticks: tick,
+        number: cc,
+        value: val / 127,
+        time: currentMidi.header.ticksToSeconds(tick)
+    });
+
+    track.controlChanges[cc].sort(
+        (a, b) => a.ticks - b.ticks
+    );
+}
+
+
+function getStopStateAtTick(track, val, tick) {
+    let state = false;
+
+    [80, 81].forEach(cc => {
+        if (!track.controlChanges[cc]) return;
+
+        track.controlChanges[cc].forEach(e => {
+            if (
+                e.ticks <= tick &&
+                Math.round(e.value * 127) === val
+            ) {
+                state = cc === 81;
+            }
+        });
+    });
+
+    return state;
+}
+
+
 
 window.handleStopToggle = function(val, name, manual, isChecked) {
     if (isUpdatingSwitches) return;
@@ -1513,11 +1669,47 @@ function renderLog() {
         let label = ""; let manual = "Sys"; let labelColor = "var(--text-color)";
         if (e.cc === swellCC) { label = e.val >= 127 ? "Swell OPEN" : "Swell CLOSED"; manual = "Exp"; labelColor = "#9b59b6"; }
         else {
-            let foundName = "Unknown";
-            for (const [man, stops] of Object.entries(organStructure)) { let stop = stops.find(s => s.val === e.val); if (stop) { foundName = stop.name; manual = man.split(' ')[0]; break; } }
-            if (e.val === percCC) { foundName = "Percussion Master"; manual = "Perc"; }
-            if (e.cc === 81) { label = foundName + " ON"; labelColor = "#27ae60"; } else { label = foundName + " OFF"; labelColor = "#e74c3c"; }
-        }
+           let foundName = "Unknown";
+let isTremulantStop = false;
+
+// First check normal stops.
+for (const [man, stops] of Object.entries(organStructure)) {
+    const stop = stops.find(s => s.val === e.val);
+
+    if (stop) {
+        foundName = stop.name;
+        manual = man.split(' ')[0];
+        break;
+    }
+}
+
+// Then check Tremulant mappings.
+const counterStops =
+    organStructure["Countermelody (Ch 4)"] || [];
+
+const tremStop = counterStops.find(
+    s => s.tremulantInstrument === e.val
+);
+
+if (tremStop) {
+    foundName = tremStop.tremulantName || `Tr${tremStop.name}`;
+    manual = "Exp";
+    isTremulantStop = true;
+}
+
+// Percussion.
+if (e.val === percCC) {
+    foundName = "Percussion Master";
+    manual = "Perc";
+}
+
+if (e.cc === 81) {
+    label = foundName + " ON";
+    labelColor = "#27ae60";
+} else {
+    label = foundName + " OFF";
+    labelColor = "#e74c3c";
+}
         
         let displayTime = formatTimeDisplay(e.ticks);
         
