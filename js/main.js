@@ -1026,19 +1026,30 @@ window.updateMapping = function(manual, index, field, value) {
 };
 
 function updateTremulantVisuals() {
-    const tremulantSwitch = document.getElementById('tremulant-switch');
+    const tremulantSwitch =
+        document.getElementById('tremulant-switch');
 
     if (tremulantSwitch) {
         tremulantSwitch.checked = tremulantActive;
     }
 
-    document.querySelectorAll('.tremulant-stop-row').forEach(row => {
+    document.querySelectorAll('[data-tremulant-stop="true"]').forEach(row => {
+        const slider = row.querySelector('.slider-switch');
+
         if (tremulantActive) {
-            row.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
-            row.style.filter = 'brightness(1.25)';
+            // Tremulant ON: make the row and switch lighter
+            row.style.backgroundColor = 'rgba(255, 255, 255, 0.10)';
+
+            if (slider) {
+                slider.style.backgroundColor = '#e8e8e8';
+            }
         } else {
+            // Tremulant OFF: restore the original appearance
             row.style.backgroundColor = '';
-            row.style.filter = '';
+
+            if (slider) {
+                slider.style.backgroundColor = '';
+            }
         }
     });
 }
@@ -1090,9 +1101,11 @@ function buildEditorUI() {
 
             const row = document.createElement('div');
 
-            row.className =
-                'stop-row' +
-                (isTremulantStop ? ' tremulant-stop-row' : '');
+            row.className = 'stop-row';
+
+if (isTremulantStop) {
+    row.dataset.tremulantStop = "true";
+}
 
             row.innerHTML = `
                 <span class="stop-name">
@@ -1934,6 +1947,7 @@ window.handleStopToggle = function(val, name, manual, isChecked) {
 
         renderLog();
         syncSwitchesToTimeline(baseTick);
+        updateTremulantVisuals();
         draw();
 
         return;
@@ -2037,6 +2051,46 @@ window.applyRegistrationState = function(pistonIndex) {
     let p = pistons[pistonIndex];
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
+
+    // General Cancel must also cancel Tremulant.
+if (p.name === "General Cancel") {
+    tremulantActive = false;
+
+    const counterStops =
+        organStructure["Countermelody (Ch 4)"] || [];
+
+    const allStops = Object.values(organStructure)
+        .flat()
+        .filter(s => s.visible !== false);
+
+    let cancelOffset = 0;
+
+    allStops.forEach(stop => {
+        addRegistrationEvent(
+            80,
+            stop.val,
+            baseTick + cancelOffset
+        );
+
+        cancelOffset++;
+
+        // Also cancel the Tremulant version.
+        if (
+            stop.tremulantInstrument !== undefined &&
+            stop.tremulantInstrument !== null
+        ) {
+            addRegistrationEvent(
+                80,
+                stop.tremulantInstrument,
+                baseTick + cancelOffset
+            );
+
+            cancelOffset++;
+        }
+    });
+
+    updateTremulantVisuals();
+}
     
     [swellCC, 80, 81].forEach(cc => { 
         if (track.controlChanges[cc]) {
