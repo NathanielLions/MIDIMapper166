@@ -549,7 +549,7 @@ const DEFAULT_ORGAN_STRUCTURE = {
             instrument: 59,
             octave: -12,
             volume: 1.0
-        ,
+        },
 
         {
             val: 15,
