@@ -1052,9 +1052,8 @@ function updateTremulantVisuals() {
             : '';
 
         // The switch itself must still show its actual ON/OFF state.
-        slider.style.backgroundColor = checkbox.checked
-            ? '#2ecc71'
-            : (tremulantActive ? '#d6d6d6' : '#e74c3c');
+       slider.style.backgroundColor =
+    checkbox.checked ? '#2ecc71' : '#e74c3c';
     });
 }
 
@@ -1974,9 +1973,14 @@ window.handleStopToggle = function(val, name, manual, isChecked) {
         }
 
         renderLog();
-        syncSwitchesToTimeline(baseTick);
-        updateTremulantVisuals();
-        draw();
+
+syncSwitchesToTimeline(
+    baseTick + (isChecked ? 1 : 0),
+    true
+);
+
+updateTremulantVisuals();
+draw();
 
         return;
     }
@@ -2372,6 +2376,18 @@ counterStops.forEach(stop => {
     isUpdatingSwitches = false;
 }
 
+function isTremulantValue(val) {
+    const counterStops =
+        organStructure["Countermelody (Ch 4)"] || [];
+
+    return counterStops.some(
+        stop =>
+            stop.tremulantInstrument !== undefined &&
+            stop.tremulantInstrument !== null &&
+            stop.tremulantInstrument === val
+    );
+}
+
 function draw() {
     if (!currentMidi) return;
     const canvas = document.getElementById('piano-roll'); if (canvas.offsetParent === null) return; 
@@ -2390,10 +2406,52 @@ function draw() {
         t.notes.forEach(n => { if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); });
     });
     let trk = getSystemTrack();
-    if (trk) {
-        [swellCC, 80, 81].forEach(cc => { if (trk.controlChanges[cc]) trk.controlChanges[cc].forEach(e => { if (e.ticks >= st && e.ticks <= st + windowTicks) { ctx.fillStyle = cc === swellCC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === swellCC ? 16 : 0, 4, 12); } }); });
-    }
-    ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo((currentTick - st) * scaleX, 0); ctx.lineTo((currentTick - st) * scaleX, rect.height); ctx.stroke();
+
+if (trk) {
+    [swellCC, 80, 81].forEach(cc => {
+        if (!trk.controlChanges[cc]) return;
+
+        trk.controlChanges[cc].forEach(e => {
+            if (e.ticks < st || e.ticks > st + windowTicks) return;
+
+            const val = Math.round(e.value * 127);
+
+            // Swell Shutters
+            if (cc === swellCC) {
+                ctx.fillStyle = '#9b59b6';
+                ctx.fillRect(
+                    ((e.ticks - st) * scaleX) - 2,
+                    16,
+                    4,
+                    12
+                );
+                return;
+            }
+
+            // Tremulant registration
+            if (isTremulantValue(val)) {
+                ctx.fillStyle = '#8e44ad';
+                ctx.fillRect(
+                    ((e.ticks - st) * scaleX) - 2,
+                    32,
+                    4,
+                    12
+                );
+                return;
+            }
+
+            // Normal stop registration
+            ctx.fillStyle =
+                cc === 81 ? '#2ecc71' : '#e74c3c';
+
+            ctx.fillRect(
+                ((e.ticks - st) * scaleX) - 2,
+                0,
+                4,
+                12
+            );
+        });
+    });
 }
 
 window.exportMidi = function() { 
