@@ -1131,14 +1131,7 @@ if (isTremulantStop) {
                         )"
                     >
 
-                    <span
-                        class="slider-switch"
-                        style="${
-                            shortMan === 'Countermelody'
-                            ? 'background-color: #b5b5b5;'
-                             : ''
-    }"
-></span>
+                   <span class="slider-switch"></span>
                 </label>
             `;
 
