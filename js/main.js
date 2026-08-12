@@ -164,10 +164,45 @@ function getInstrumentForStop(stop) {
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
+
+    // =====================================
+    // PERCUSSION PREVIEW
+    // MIDI channel 10 = JS channel 9
+    // =====================================
+    if (channel === PERCUSSION_CHANNEL) {
+        setTimeout(() => {
+
+            // Use the MIDI percussion note directly.
+            synth.send([
+                0x99,              // Note On, MIDI Channel 10
+                note.midi,
+                Math.min(
+                    127,
+                    Math.floor((note.velocity || 1) * 127)
+                )
+            ]);
+
+            setTimeout(() => {
+                synth.send([
+                    0x89,            // Note Off, MIDI Channel 10
+                    note.midi,
+                    0
+                ]);
+            }, note.duration * 1000);
+
+        }, delaySeconds * 1000);
+
+        return;
+    }
+
+    // =====================================
+    // NORMAL ORGAN PLAYBACK
+    // =====================================
     const activeStops = getActiveStopsForNote(channel, note.midi);
 
     setTimeout(() => {
         activeStops.forEach(stop => {
+
             const finalMidi = note.midi + (stop.octave || 0);
 
             const velocity = Math.min(
@@ -198,9 +233,11 @@ function scheduleNotePlay(note, channel, delaySeconds) {
                     0
                 ]);
             }, note.duration * 1000);
+
         });
     }, delaySeconds * 1000);
 }
+
 // ==========================================
 // TIME & DISPLAY ENGINE
 // ==========================================
@@ -265,6 +302,7 @@ let isUpdatingSwitches = false;
 
 let hiddenChannels = new Set();
 
+const PERCUSSION_CHANNEL = 9;
 const channelColors = [
     '#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e',
     '#ff9ff3', '#8e44ad', '#48dbfb', '#1dd1a1', '#f368e0', '#ff9f43', '#0abde3', '#10ac84'
@@ -1567,6 +1605,12 @@ window.buildRoutingUI = function() {
 };
 
 window.applyRoutingAndStart = function() {
+    const organPreset = document.getElementById('organ-preset');
+
+if (!organPreset || !organPreset.value) {
+    alert("Please choose an organ before continuing.");
+    return;
+}
     let activeChannels = new Set();
     currentMidi.tracks.forEach(t => {
         if (t.notes.length > 0 && t.channel !== 15) activeChannels.add(t.channel);
@@ -1611,7 +1655,32 @@ window.applyRoutingAndStart = function() {
     currentMidi.tracks = currentMidi.tracks.filter(t => !tracksToRemove.includes(t));
     
     finalizeImport();
+unlockEditorTabs();
 };
+ function unlockEditorTabs() {
+    const editorTab = document.getElementById('tab-editor');
+    const exportTab = document.getElementById('tab-export');
+
+    if (editorTab) {
+        editorTab.disabled = false;
+        editorTab.classList.remove('locked');
+        editorTab.innerHTML = '2. Editor';
+
+        editorTab.onclick = function () {
+            openTab('page-editor', this);
+        };
+    }
+
+    if (exportTab) {
+        exportTab.disabled = false;
+        exportTab.classList.remove('locked');
+        exportTab.innerHTML = '3. History & Export';
+
+        exportTab.onclick = function () {
+            openTab('page-export', this);
+        };
+    }
+}
 
 window.openTab = function(pageId, tabButton) {
     // Hide every tab page
