@@ -313,7 +313,11 @@ const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "T
 const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 10;
 
-const DEFAULT_ORGAN_STRUCTURE = {
+// ==========================================
+// PADDERALT FAIRO 109 PRESET
+// ==========================================
+
+const FAIRO109_ORGAN_STRUCTURE = {
 
     "Accompaniment (Ch 2)": [
 
@@ -600,6 +604,57 @@ const DEFAULT_ORGAN_STRUCTURE = {
     ]
 };
 
+// ==========================================
+// WURLITZER 125 PRESET
+// ==========================================
+
+const WURLITZER125_ORGAN_STRUCTURE = {
+
+    "Trumpetmelody (Ch 1)": [
+        {
+            val: 66,
+            name: "Trumpet",
+            visible: true,
+            instrument: 66,
+            octave: 0,
+            volume: 1.0
+        }
+    ],
+
+    "Countermelody (Ch 2)": [
+        {
+            val: 40,
+            name: "Melody",
+            visible: true,
+            instrument: 40,
+            octave: 0,
+            volume: 1.0
+        }
+    ],
+
+    "Accompaniment (Ch 3)": [
+        {
+            val: 42,
+            name: "Accomp",
+            visible: true,
+            instrument: 42,
+            octave: 0,
+            volume: 1.0
+        }
+    ],
+
+    "Bass (Ch 4)": [
+        {
+            val: 73,
+            name: "Bass",
+            visible: true,
+            instrument: 73,
+            octave: 0,
+            volume: 1.0
+        }
+    ]
+};
+
 const DEFAULT_PISTONS = [
     { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58, 12], swell: 64 }, 
     { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
@@ -609,6 +664,59 @@ const DEFAULT_PISTONS = [
     { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
+
+const ORGAN_PRESETS = {
+
+    fairo109: {
+        name: "Fairo 109",
+        structure: FAIRO109_ORGAN_STRUCTURE,
+        swellCC: 4,
+        percCC: 10,
+        hasTremulant: true
+    },
+
+    wurlit125: {
+        name: "Wurlitzer 125",
+        structure: WURLITZER125_ORGAN_STRUCTURE,
+        swellCC: 4,
+        percCC: 10,
+        hasTremulant: false
+    }
+
+};
+
+let currentOrganPreset = "fairo109";
+
+function loadOrganPreset(presetId) {
+
+    const preset = ORGAN_PRESETS[presetId];
+
+    if (!preset) {
+        console.error("Unknown organ preset:", presetId);
+        return false;
+    }
+
+    currentOrganPreset = presetId;
+
+    organStructure = JSON.parse(
+        JSON.stringify(preset.structure)
+    );
+
+    swellCC = preset.swellCC;
+    percCC = preset.percCC;
+
+    // Wurlitzer 125 has no tremulant.
+    tremulantActive = false;
+
+    updateGlobalStopList();
+
+    buildSettingsUI();
+    buildEditorUI();
+
+    return true;
+}
+
+const DEFAULT_ORGAN_STRUCTURE = FAIRO109_ORGAN_STRUCTURE;
 
 let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
@@ -1260,25 +1368,24 @@ if (isTremulantStop) {
                 </label>
             </div>
 
+    <!-- TREMULANT -->
+    <div class="stop-row">
+        <span
+            class="stop-name"
+            style="color: #8e44ad;"
+        >
+            Tremulant
+        </span>
 
-            <!-- TREMULANT -->
-            <div class="stop-row">
-                <span
-                    class="stop-name"
-                    style="color: #8e44ad;"
-                >
-                    Tremulant
-                </span>
-
-                <label class="switch">
-                    <input
-                        type="checkbox"
-                        id="tremulant-switch"
-                        onchange="handleTremulantToggle(this.checked)"
-                    >
-                    <span class="slider-switch tremulant-bg"></span>
-                </label>
-            </div>
+        <label class="switch">
+            <input
+                type="checkbox"
+                id="tremulant-switch"
+                onchange="handleTremulantToggle(this.checked)"
+            >
+            <span class="slider-switch tremulant-bg"></span>
+        </label>
+    </div>
 
         </div>
     `;
@@ -1611,6 +1718,11 @@ if (!organPreset || !organPreset.value) {
     alert("Please choose an organ before continuing.");
     return;
 }
+    if (!loadOrganPreset(organPreset.value)) {
+    alert("Unable to load the selected organ preset.");
+    return;
+}
+    
     let activeChannels = new Set();
     currentMidi.tracks.forEach(t => {
         if (t.notes.length > 0 && t.channel !== 15) activeChannels.add(t.channel);
