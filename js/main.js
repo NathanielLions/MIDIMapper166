@@ -2446,6 +2446,7 @@ if (trk) {
         });
     });
 }
+}
 
 window.exportMidi = function() { 
     if (!currentMidi) return; 
