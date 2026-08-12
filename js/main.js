@@ -2749,24 +2749,125 @@ if (trk) {
 }
 }
 
-window.exportMidi = function() { 
-    if (!currentMidi) return; 
-    
-    // Safety sync: Ensure Tone.js binds the notes to the newly updated track channels before compiling
-    currentMidi.tracks.forEach(t => {
-        t.notes.forEach(n => n.channel = t.channel);
-        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
+window.exportMidi = function() {
+    if (!currentMidi) return;
+
+    // ==================================================
+    // CREATE AN EXPORT COPY
+    // ==================================================
+    // Do not modify the editor's working MIDI.
+    const exportMidi = new Midi(currentMidi.toArray());
+
+    // ==================================================
+    // NORMALIZE TRACK CHANNELS
+    // ==================================================
+    exportMidi.tracks.forEach(track => {
+
+        track.notes.forEach(note => {
+            note.channel = track.channel;
+        });
+
+        Object.values(track.controlChanges)
+            .flat()
+            .forEach(cc => {
+                cc.channel = track.channel;
+            });
     });
 
-    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
-    const a = document.createElement("a"); 
-    a.href = URL.createObjectURL(blob); 
+    // ==================================================
+    // SWELL
+    // ==================================================
+    // Wurlitzer 125:
+    //
+    //   Swell  = MIDI Channel 4
+    //   Stops  = MIDI Channel 16
+    //
+    // Internally, CC4 is stored on the system track
+    // because the editor uses that track for timeline
+    // registration/expression events.
+    //
+    // For export, move CC4 to its REAL organ channel.
+    // ==================================================
+
+    const systemTrack = exportMidi.tracks.find(track =>
+        track.channel === 15 ||
+        (track.controlChanges[80] &&
+            track.controlChanges[80].length > 0) ||
+        (track.controlChanges[81] &&
+            track.controlChanges[81].length > 0)
+    );
+
+    if (systemTrack && systemTrack.controlChanges[swellCC]) {
+
+        // Wurlitzer 125 Swell = MIDI Channel 4
+        const swellEvents = systemTrack.controlChanges[swellCC];
+
+        if (swellEvents.length > 0) {
+
+            // Create a dedicated Swell track.
+            const swellTrack = exportMidi.addTrack();
+
+            // Tone.js uses zero-based channel numbers.
+            // 3 = MIDI Channel 4.
+            swellTrack.channel = 3;
+
+            swellEvents.forEach(event => {
+                swellTrack.controlChanges[swellCC].push({
+                    ticks: event.ticks,
+                    number: swellCC,
+                    value: event.value,
+                    time: event.time,
+                    channel: 3
+                });
+            });
+        }
+
+        // Remove CC4 from the Channel 16 system track.
+        // CC80/81 stay there.
+        delete systemTrack.controlChanges[swellCC];
+    }
+
+    // ==================================================
+    // EXPORT
+    // ==================================================
+
+    const blob = new Blob(
+        [exportMidi.toArray()],
+        { type: "audio/midi" }
+    );
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+
     a.download =
-    fileName +
-    (currentOrganPreset === "wurlit125"
-        ? "_W125.mid"
-        : "_FAIRO.mid");
-    a.click(); 
+        fileName +
+        (currentOrganPreset === "wurlit125"
+            ? "_W125.mid"
+            : "_FAIRO.mid");
+
+    a.click();
+
+    setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+    }, 1000);
+};
+
+
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+
+    a.download =
+        fileName +
+        (currentOrganPreset === "wurlit125"
+            ? "_W125.mid"
+            : "_FAIRO.mid");
+
+    a.click();
+
+    setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+    }, 1000);
 };
 
 // ==========================================
