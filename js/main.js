@@ -1390,6 +1390,9 @@ if (isTremulantStop) {
                 </div>
             ` : ''}
 
+        </div>
+    `;
+
     document.getElementById('col-bass-exp').appendChild(expDiv);
     
     // ==========================================
