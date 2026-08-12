@@ -37,6 +37,17 @@ h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; color: var(--heading-
 .tabs-nav { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;}
 .tab-btn { background: var(--tab-bg); color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: 0.3s; }
 .tab-btn:hover { filter: brightness(0.9); }
+.tab-btn.locked,
+.tab-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: grayscale(1);
+}
+
+.tab-btn:disabled:hover {
+    background: inherit;
+    color: inherit;
+}
 
 #tab-import.active { background: #e74c3c; box-shadow: 0 4px 10px rgba(231, 76, 60, 0.4); }
 #tab-editor.active { background: #3498db; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4); }
