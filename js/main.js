@@ -1675,6 +1675,12 @@ window.deleteAllRemap = function(unknowns) {
 // 4. NEW: PRE-EDITOR ROUTING ENGINE
 // ==========================================
 window.buildRoutingUI = function() {
+    // Use the organ selected in the dropdown.
+    // currentOrganPreset may still contain the previous preset
+    // while the routing screen is being built.
+    const selectedPreset =
+        document.getElementById('organ-preset')?.value || currentOrganPreset;
+
     let activeChannels = new Set();
     let channelNames = {};
     
@@ -1699,7 +1705,7 @@ window.buildRoutingUI = function() {
         routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
             <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
             <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
-               ${currentOrganPreset === "wurlit125" ? `
+               ${selectedPreset === "wurlit125" ? `
     <option value="1" ${ch === 0 ? 'selected' : ''}>
         Bass (Out Ch 1)
     </option>
