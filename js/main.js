@@ -610,29 +610,18 @@ const FAIRO109_ORGAN_STRUCTURE = {
 
 const WURLITZER125_ORGAN_STRUCTURE = {
 
-    "Trumpetmelody (Ch 1)": [
+    "Bass (Ch 1)": [
         {
-            val: 66,
-            name: "Trumpet",
+            val: 73,
+            name: "Bass",
             visible: true,
-            instrument: 66,
+            instrument: 73,
             octave: 0,
             volume: 1.0
         }
     ],
 
-    "Countermelody (Ch 2)": [
-        {
-            val: 40,
-            name: "Melody",
-            visible: true,
-            instrument: 40,
-            octave: 0,
-            volume: 1.0
-        }
-    ],
-
-    "Accompaniment (Ch 3)": [
+    "Accompaniment (Ch 2)": [
         {
             val: 42,
             name: "Accomp",
@@ -643,16 +632,28 @@ const WURLITZER125_ORGAN_STRUCTURE = {
         }
     ],
 
-    "Bass (Ch 4)": [
+    "Countermelody (Ch 3)": [
         {
-            val: 73,
-            name: "Bass",
+            val: 40,
+            name: "Melody",
             visible: true,
-            instrument: 73,
+            instrument: 40,
+            octave: 0,
+            volume: 1.0
+        }
+    ],
+
+    "Trumpetmelody (Ch 4)": [
+        {
+            val: 66,
+            name: "Trumpet",
+            visible: true,
+            instrument: 66,
             octave: 0,
             volume: 1.0
         }
     ]
+
 };
 
 const DEFAULT_PISTONS = [
@@ -1368,27 +1369,26 @@ if (isTremulantStop) {
                 </label>
             </div>
 
-    <!-- TREMULANT -->
-    <div class="stop-row">
-        <span
-            class="stop-name"
-            style="color: #8e44ad;"
-        >
-            Tremulant
-        </span>
+                ${ORGAN_PRESETS[currentOrganPreset].hasTremulant ? `
+                <!-- TREMULANT -->
+                <div class="stop-row">
+                    <span
+                        class="stop-name"
+                        style="color: #8e44ad;"
+                    >
+                        Tremulant
+                    </span>
 
-        <label class="switch">
-            <input
-                type="checkbox"
-                id="tremulant-switch"
-                onchange="handleTremulantToggle(this.checked)"
-            >
-            <span class="slider-switch tremulant-bg"></span>
-        </label>
-    </div>
-
-        </div>
-    `;
+                    <label class="switch">
+                        <input
+                            type="checkbox"
+                            id="tremulant-switch"
+                            onchange="handleTremulantToggle(this.checked)"
+                        >
+                        <span class="slider-switch tremulant-bg"></span>
+                    </label>
+                </div>
+            ` : ''}
 
     document.getElementById('col-bass-exp').appendChild(expDiv);
     
@@ -1696,11 +1696,33 @@ window.buildRoutingUI = function() {
         routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
             <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
             <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
-                <option value="1" ${sel1}>Percussion (Out Ch 10 - Rhythm)</option>
-                <option value="2" ${sel2}>Accompaniment (Out Ch 2)</option>
-                <option value="3" ${sel3}>Trumpetmelody (Out Ch 3)</option>
-                <option value="4-counter" ${sel4c}>Countermelody (Out Ch 4)</option>
-                <option value="4-bass" ${sel4b}>Bass (Out Ch 4)</option>
+               ${currentOrganPreset === "wurlit125" ? `
+    <option value="1" ${ch === 0 ? 'selected' : ''}>
+        Bass (Out Ch 1)
+    </option>
+
+    <option value="2" ${ch === 1 ? 'selected' : ''}>
+        Accompaniment (Out Ch 2)
+    </option>
+
+    <option value="3" ${ch === 2 ? 'selected' : ''}>
+        Countermelody (Out Ch 3)
+    </option>
+
+    <option value="4" ${ch === 3 ? 'selected' : ''}>
+        Trumpetmelody (Out Ch 4)
+    </option>
+
+    <option value="perc" ${ch === 9 ? 'selected' : ''}>
+        Percussion (Out Ch 10 - Rhythm)
+    </option>
+` : `
+    <option value="1" ${sel1}>Percussion (Out Ch 10 - Rhythm)</option>
+    <option value="2" ${sel2}>Accompaniment (Out Ch 2)</option>
+    <option value="3" ${sel3}>Trumpetmelody (Out Ch 3)</option>
+    <option value="4-counter" ${sel4c}>Countermelody (Out Ch 4)</option>
+    <option value="4-bass" ${sel4b}>Bass (Out Ch 4)</option>
+`}
                 <option value="ignore">🗑️ Ignore / Mute Track</option>
             </select>
         </div>`;
@@ -1735,12 +1757,70 @@ if (!organPreset || !organPreset.value) {
     });
 
     // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
-    const targetMap = {
-        "1": { ch: 9, name: "Percussion (Rhythm)", gm: 115 }, // 115 = Woodblock / Trap Drums, Ch 9 = MIDI Ch 10 Rhythm
-        "2": { ch: 1, name: "Accompaniment", gm: 4 }, // 4 = Electric Piano 1
-        "3": { ch: 2, name: "Trumpetmelody", gm: 56 }, // 56 = Trumpet
-        "4-counter": { ch: 3, name: "Countermelody", gm: 0 }, // 0 = Acoustic Grand Piano
-        "4-bass": { ch: 3, name: "Bass", gm: 32 } // 32 = Acoustic Bass
+    const targetMap = currentOrganPreset === "wurlit125"
+
+    ? {
+        "1": {
+            ch: 0,
+            name: "Bass",
+            gm: 32
+        },
+
+        "2": {
+            ch: 1,
+            name: "Accompaniment",
+            gm: 4
+        },
+
+        "3": {
+            ch: 2,
+            name: "Countermelody",
+            gm: 0
+        },
+
+        "4": {
+            ch: 3,
+            name: "Trumpetmelody",
+            gm: 56
+        },
+
+        "perc": {
+            ch: 9,
+            name: "Percussion (Rhythm)",
+            gm: 115
+        }
+    }
+
+    : {
+        "1": {
+            ch: 9,
+            name: "Percussion (Rhythm)",
+            gm: 115
+        },
+
+        "2": {
+            ch: 1,
+            name: "Accompaniment",
+            gm: 4
+        },
+
+        "3": {
+            ch: 2,
+            name: "Trumpetmelody",
+            gm: 56
+        },
+
+        "4-counter": {
+            ch: 3,
+            name: "Countermelody",
+            gm: 0
+        },
+
+        "4-bass": {
+            ch: 3,
+            name: "Bass",
+            gm: 32
+        }
     };
 
     let tracksToRemove = [];
@@ -2671,7 +2751,11 @@ window.exportMidi = function() {
     const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
     const a = document.createElement("a"); 
     a.href = URL.createObjectURL(blob); 
-    a.download = fileName + "_FAIRO.mid"; 
+    a.download =
+    fileName +
+    (currentOrganPreset === "wurlit125"
+        ? "_W125.mid"
+        : "_FAIRO.mid");
     a.click(); 
 };
 
