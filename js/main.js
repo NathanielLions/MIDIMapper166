@@ -1744,6 +1744,7 @@ window.buildRoutingUI = function() {
 
 window.applyRoutingAndStart = function() {
     const organPreset = document.getElementById('organ-preset');
+    const selectedPreset = organPreset.value;
 
 if (!organPreset || !organPreset.value) {
     alert("Please choose an organ before continuing.");
@@ -1766,7 +1767,7 @@ if (!organPreset || !organPreset.value) {
     });
 
     // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
-    const targetMap = currentOrganPreset === "wurlit125"
+    const targetMap = selectedPreset === "wurlit125"
 
     ? {
         "1": {
