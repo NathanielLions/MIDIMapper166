@@ -1982,7 +1982,7 @@ draw();
     // NORMAL STOP
     // -----------------------------------------
 
-    if (isChecked) {
+        if (isChecked) {
         addEvent(
             81,
             val,
@@ -1997,6 +1997,11 @@ draw();
             manual
         );
     }
+
+    // Immediately update the switch appearance.
+    // Do not wait for playback/timeline synchronization.
+    updateTremulantVisuals();
+    draw();
 };
 
 function removeRegistrationAtTick(cc, val, tick) {
@@ -2392,8 +2397,33 @@ function draw() {
     const zoom = parseFloat(document.getElementById('zoom-slider').value); const windowTicks = sliderMax / zoom;
     let st = Math.max(0, Math.min(sliderMax - windowTicks, currentTick - (windowTicks / 2)));
     const scaleX = rect.width / windowTicks; const noteHeight = rect.height / (maxMidiNote - minMidiNote + 4);
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-    for(let i = Math.ceil(st / ppq) * ppq; i <= st + windowTicks; i += ppq) { ctx.beginPath(); ctx.moveTo((i - st) * scaleX, 0); ctx.lineTo((i - st) * scaleX, rect.height); ctx.stroke(); }
+    // Timing grid
+ctx.strokeStyle = '#333';
+ctx.lineWidth = 1;
+
+for (
+    let i = Math.ceil(st / ppq) * ppq;
+    i <= st + windowTicks;
+    i += ppq
+) {
+    ctx.beginPath();
+    ctx.moveTo((i - st) * scaleX, 0);
+    ctx.lineTo((i - st) * scaleX, rect.height);
+    ctx.stroke();
+}
+
+// Current tick / playhead line
+const playheadX = (currentTick - st) * scaleX;
+
+if (playheadX >= 0 && playheadX <= rect.width) {
+    ctx.strokeStyle = '#1683ff';
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(playheadX, 0);
+    ctx.lineTo(playheadX, rect.height);
+    ctx.stroke();
+}
     currentMidi.tracks.forEach(t => {
         if (hiddenChannels.has(t.channel)) return; ctx.fillStyle = channelColors[t.channel % 16];
         t.notes.forEach(n => { if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); });
