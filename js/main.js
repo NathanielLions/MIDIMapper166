@@ -257,7 +257,7 @@ window.nudgeSeconds = function(amountSec) {
 // 2. CORE EDITOR LOGIC & STATE
 // ==========================================
 let currentMidi = null;
-let fileName = "wurlitzer_output";
+let fileName = "fairo109_output";
 let ppq = 384; 
 let minMidiNote = 127;
 let maxMidiNote = 0;
@@ -595,7 +595,7 @@ updateGlobalStopList();
 let editingPistonIndex = 0;
 
 window.resetToDefaults = function() {
-    if (confirm("⚠️ Are you sure you want to restore the default Wurlitzer 166 settings? \n\nThis will erase any custom stops, remappings, and piston modifications you have made!")) {
+    if (confirm("⚠️ Are you sure you want to restore the default Fairo 109 settings? \n\nThis will erase any custom stops, remappings, and piston modifications you have made!")) {
         swellCC = DEFAULT_SWELL_CC;
         percCC = DEFAULT_PERC_CC;
         tremulantActive = false;
@@ -941,7 +941,7 @@ title="Octave"
     container.innerHTML += pistonHtml;
 
     container.innerHTML += `<div style="margin-top: 25px; text-align: center; border-top: 1px solid var(--border-color); padding-top: 25px;">
-        <button class="nudge-btn" style="background: #c0392b; color: white; padding: 12px 24px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 5px;" onclick="resetToDefaults()">⚠️ Reset to Default W166 Settings</button>
+        <button class="nudge-btn" style="background: #c0392b; color: white; padding: 12px 24px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 5px;" onclick="resetToDefaults()">⚠️ Reset to Default Fairo 109 Settings</button>
         <p style="color: #7f8c8d; font-size: 0.85em; margin-top: 10px;">This will safely restore all original ranks, CC values, and piston configurations.</p>
     </div>`;
 }
@@ -1326,7 +1326,7 @@ function createImportModal() {
     modal.innerHTML = `
         <div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:400px; text-align:center; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
             <h3 style="margin-top:0; color:#f39c12; font-size:1.4em;">Organ Data Detected</h3>
-            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Wurlitzer registration data. How would you like to proceed?</p>
+            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Fairo 109 registration data. How would you like to proceed?</p>
             <div style="display:flex; flex-direction:column; gap:12px;">
                 <button class="nudge-btn" style="background:#3498db; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('modify')">Modify Existing Mappings</button>
                 <button class="nudge-btn" style="background:#e74c3c; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('clear')">Start Over (Clear Mappings)</button>
