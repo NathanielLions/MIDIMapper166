@@ -586,7 +586,7 @@ let percCC = DEFAULT_PERC_CC;
 
 let tremulantActive = false;
 let applyCoupledRegisters = false;
-applyCoupledRegisters = false;
+applyCoupledRegisters = true;
 
 const COUPLED_REGISTERS = {
     "Brass Register": [
