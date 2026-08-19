@@ -164,45 +164,10 @@ function getInstrumentForStop(stop) {
 }
 
 function scheduleNotePlay(note, channel, delaySeconds) {
-
-    // =====================================
-    // PERCUSSION PREVIEW
-    // MIDI channel 10 = JS channel 9
-    // =====================================
-    if (channel === PERCUSSION_CHANNEL) {
-        setTimeout(() => {
-
-            // Use the MIDI percussion note directly.
-            synth.send([
-                0x99,              // Note On, MIDI Channel 10
-                note.midi,
-                Math.min(
-                    127,
-                    Math.floor((note.velocity || 1) * 127)
-                )
-            ]);
-
-            setTimeout(() => {
-                synth.send([
-                    0x89,            // Note Off, MIDI Channel 10
-                    note.midi,
-                    0
-                ]);
-            }, note.duration * 1000);
-
-        }, delaySeconds * 1000);
-
-        return;
-    }
-
-    // =====================================
-    // NORMAL ORGAN PLAYBACK
-    // =====================================
     const activeStops = getActiveStopsForNote(channel, note.midi);
 
     setTimeout(() => {
         activeStops.forEach(stop => {
-
             const finalMidi = note.midi + (stop.octave || 0);
 
             const velocity = Math.min(
@@ -233,11 +198,9 @@ function scheduleNotePlay(note, channel, delaySeconds) {
                     0
                 ]);
             }, note.duration * 1000);
-
         });
     }, delaySeconds * 1000);
 }
-
 // ==========================================
 // TIME & DISPLAY ENGINE
 // ==========================================
@@ -302,7 +265,6 @@ let isUpdatingSwitches = false;
 
 let hiddenChannels = new Set();
 
-const PERCUSSION_CHANNEL = 9;
 const channelColors = [
     '#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e',
     '#ff9ff3', '#8e44ad', '#48dbfb', '#1dd1a1', '#f368e0', '#ff9f43', '#0abde3', '#10ac84'
@@ -313,11 +275,7 @@ const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "T
 const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 10;
 
-// ==========================================
-// PADDERALT FAIRO 109 PRESET
-// ==========================================
-
-const FAIRO109_ORGAN_STRUCTURE = {
+const DEFAULT_ORGAN_STRUCTURE = {
 
     "Accompaniment (Ch 2)": [
 
@@ -604,58 +562,6 @@ const FAIRO109_ORGAN_STRUCTURE = {
     ]
 };
 
-// ==========================================
-// WURLITZER 125 PRESET
-// ==========================================
-
-const WURLITZER125_ORGAN_STRUCTURE = {
-
-    "Bass (Ch 1)": [
-        {
-            val: 73,
-            name: "Bass",
-            visible: true,
-            instrument: 73,
-            octave: 0,
-            volume: 1.0
-        }
-    ],
-
-    "Accompaniment (Ch 2)": [
-        {
-            val: 42,
-            name: "Accomp",
-            visible: true,
-            instrument: 42,
-            octave: 0,
-            volume: 1.0
-        }
-    ],
-
-    "Countermelody (Ch 3)": [
-        {
-            val: 40,
-            name: "Melody",
-            visible: true,
-            instrument: 40,
-            octave: 0,
-            volume: 1.0
-        }
-    ],
-
-    "Trumpetmelody (Ch 4)": [
-        {
-            val: 66,
-            name: "Trumpet",
-            visible: true,
-            instrument: 66,
-            octave: 0,
-            volume: 1.0
-        }
-    ]
-
-};
-
 const DEFAULT_PISTONS = [
     { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58, 12], swell: 64 }, 
     { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
@@ -665,59 +571,6 @@ const DEFAULT_PISTONS = [
     { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
-
-const ORGAN_PRESETS = {
-
-    fairo109: {
-        name: "Fairo 109",
-        structure: FAIRO109_ORGAN_STRUCTURE,
-        swellCC: 4,
-        percCC: 10,
-        hasTremulant: true
-    },
-
-    wurlit125: {
-        name: "Wurlitzer 125",
-        structure: WURLITZER125_ORGAN_STRUCTURE,
-        swellCC: 4,
-        percCC: 10,
-        hasTremulant: false
-    }
-
-};
-
-let currentOrganPreset = "fairo109";
-
-function loadOrganPreset(presetId) {
-
-    const preset = ORGAN_PRESETS[presetId];
-
-    if (!preset) {
-        console.error("Unknown organ preset:", presetId);
-        return false;
-    }
-
-    currentOrganPreset = presetId;
-
-    organStructure = JSON.parse(
-        JSON.stringify(preset.structure)
-    );
-
-    swellCC = preset.swellCC;
-    percCC = preset.percCC;
-
-    // Wurlitzer 125 has no tremulant.
-    tremulantActive = false;
-
-    updateGlobalStopList();
-
-    buildSettingsUI();
-    buildEditorUI();
-
-    return true;
-}
-
-const DEFAULT_ORGAN_STRUCTURE = FAIRO109_ORGAN_STRUCTURE;
 
 let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
@@ -1369,26 +1222,25 @@ if (isTremulantStop) {
                 </label>
             </div>
 
-                ${ORGAN_PRESETS[currentOrganPreset].hasTremulant ? `
-                <!-- TREMULANT -->
-                <div class="stop-row">
-                    <span
-                        class="stop-name"
-                        style="color: #8e44ad;"
-                    >
-                        Tremulant
-                    </span>
 
-                    <label class="switch">
-                        <input
-                            type="checkbox"
-                            id="tremulant-switch"
-                            onchange="handleTremulantToggle(this.checked)"
-                        >
-                        <span class="slider-switch tremulant-bg"></span>
-                    </label>
-                </div>
-            ` : ''}
+            <!-- TREMULANT -->
+            <div class="stop-row">
+                <span
+                    class="stop-name"
+                    style="color: #8e44ad;"
+                >
+                    Tremulant
+                </span>
+
+                <label class="switch">
+                    <input
+                        type="checkbox"
+                        id="tremulant-switch"
+                        onchange="handleTremulantToggle(this.checked)"
+                    >
+                    <span class="slider-switch tremulant-bg"></span>
+                </label>
+            </div>
 
         </div>
     `;
@@ -1675,12 +1527,6 @@ window.deleteAllRemap = function(unknowns) {
 // 4. NEW: PRE-EDITOR ROUTING ENGINE
 // ==========================================
 window.buildRoutingUI = function() {
-    // Use the organ selected in the dropdown.
-    // currentOrganPreset may still contain the previous preset
-    // while the routing screen is being built.
-    const selectedPreset =
-        document.getElementById('organ-preset')?.value || currentOrganPreset;
-
     let activeChannels = new Set();
     let channelNames = {};
     
@@ -1705,33 +1551,11 @@ window.buildRoutingUI = function() {
         routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
             <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
             <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
-               ${selectedPreset === "wurlit125" ? `
-    <option value="1" ${ch === 0 ? 'selected' : ''}>
-        Bass (Out Ch 1)
-    </option>
-
-    <option value="2" ${ch === 1 ? 'selected' : ''}>
-        Accompaniment (Out Ch 2)
-    </option>
-
-    <option value="3" ${ch === 2 ? 'selected' : ''}>
-        Countermelody (Out Ch 3)
-    </option>
-
-    <option value="4" ${ch === 3 ? 'selected' : ''}>
-        Trumpetmelody (Out Ch 4)
-    </option>
-
-    <option value="perc" ${ch === 9 ? 'selected' : ''}>
-        Percussion (Out Ch 10 - Rhythm)
-    </option>
-` : `
-    <option value="1" ${sel1}>Percussion (Out Ch 10 - Rhythm)</option>
-    <option value="2" ${sel2}>Accompaniment (Out Ch 2)</option>
-    <option value="3" ${sel3}>Trumpetmelody (Out Ch 3)</option>
-    <option value="4-counter" ${sel4c}>Countermelody (Out Ch 4)</option>
-    <option value="4-bass" ${sel4b}>Bass (Out Ch 4)</option>
-`}
+                <option value="1" ${sel1}>Percussion (Out Ch 10 - Rhythm)</option>
+                <option value="2" ${sel2}>Accompaniment (Out Ch 2)</option>
+                <option value="3" ${sel3}>Trumpetmelody (Out Ch 3)</option>
+                <option value="4-counter" ${sel4c}>Countermelody (Out Ch 4)</option>
+                <option value="4-bass" ${sel4b}>Bass (Out Ch 4)</option>
                 <option value="ignore">🗑️ Ignore / Mute Track</option>
             </select>
         </div>`;
@@ -1743,18 +1567,6 @@ window.buildRoutingUI = function() {
 };
 
 window.applyRoutingAndStart = function() {
-    const organPreset = document.getElementById('organ-preset');
-    const selectedPreset = organPreset.value;
-
-if (!organPreset || !organPreset.value) {
-    alert("Please choose an organ before continuing.");
-    return;
-}
-    if (!loadOrganPreset(organPreset.value)) {
-    alert("Unable to load the selected organ preset.");
-    return;
-}
-    
     let activeChannels = new Set();
     currentMidi.tracks.forEach(t => {
         if (t.notes.length > 0 && t.channel !== 15) activeChannels.add(t.channel);
@@ -1767,70 +1579,12 @@ if (!organPreset || !organPreset.value) {
     });
 
     // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
-    const targetMap = selectedPreset === "wurlit125"
-
-    ? {
-        "1": {
-            ch: 0,
-            name: "Bass",
-            gm: 32
-        },
-
-        "2": {
-            ch: 1,
-            name: "Accompaniment",
-            gm: 4
-        },
-
-        "3": {
-            ch: 2,
-            name: "Countermelody",
-            gm: 0
-        },
-
-        "4": {
-            ch: 3,
-            name: "Trumpetmelody",
-            gm: 56
-        },
-
-        "perc": {
-            ch: 9,
-            name: "Percussion (Rhythm)",
-            gm: 115
-        }
-    }
-
-    : {
-        "1": {
-            ch: 9,
-            name: "Percussion (Rhythm)",
-            gm: 115
-        },
-
-        "2": {
-            ch: 1,
-            name: "Accompaniment",
-            gm: 4
-        },
-
-        "3": {
-            ch: 2,
-            name: "Trumpetmelody",
-            gm: 56
-        },
-
-        "4-counter": {
-            ch: 3,
-            name: "Countermelody",
-            gm: 0
-        },
-
-        "4-bass": {
-            ch: 3,
-            name: "Bass",
-            gm: 32
-        }
+    const targetMap = {
+        "1": { ch: 9, name: "Percussion (Rhythm)", gm: 115 }, // 115 = Woodblock / Trap Drums, Ch 9 = MIDI Ch 10 Rhythm
+        "2": { ch: 1, name: "Accompaniment", gm: 4 }, // 4 = Electric Piano 1
+        "3": { ch: 2, name: "Trumpetmelody", gm: 56 }, // 56 = Trumpet
+        "4-counter": { ch: 3, name: "Countermelody", gm: 0 }, // 0 = Acoustic Grand Piano
+        "4-bass": { ch: 3, name: "Bass", gm: 32 } // 32 = Acoustic Bass
     };
 
     let tracksToRemove = [];
@@ -1857,32 +1611,7 @@ if (!organPreset || !organPreset.value) {
     currentMidi.tracks = currentMidi.tracks.filter(t => !tracksToRemove.includes(t));
     
     finalizeImport();
-unlockEditorTabs();
 };
- function unlockEditorTabs() {
-    const editorTab = document.getElementById('tab-editor');
-    const exportTab = document.getElementById('tab-export');
-
-    if (editorTab) {
-        editorTab.disabled = false;
-        editorTab.classList.remove('locked');
-        editorTab.innerHTML = '2. Editor';
-
-        editorTab.onclick = function () {
-            openTab('page-editor', this);
-        };
-    }
-
-    if (exportTab) {
-        exportTab.disabled = false;
-        exportTab.classList.remove('locked');
-        exportTab.innerHTML = '3. History & Export';
-
-        exportTab.onclick = function () {
-            openTab('page-export', this);
-        };
-    }
-}
 
 window.openTab = function(pageId, tabButton) {
     // Hide every tab page
@@ -2749,125 +2478,20 @@ if (trk) {
 }
 }
 
-window.exportMidi = function() {
-    if (!currentMidi) return;
-
-    // ==================================================
-    // CREATE AN EXPORT COPY
-    // ==================================================
-    // Do not modify the editor's working MIDI.
-    const exportMidi = new Midi(currentMidi.toArray());
-
-    // ==================================================
-    // NORMALIZE TRACK CHANNELS
-    // ==================================================
-    exportMidi.tracks.forEach(track => {
-
-        track.notes.forEach(note => {
-            note.channel = track.channel;
-        });
-
-        Object.values(track.controlChanges)
-            .flat()
-            .forEach(cc => {
-                cc.channel = track.channel;
-            });
+window.exportMidi = function() { 
+    if (!currentMidi) return; 
+    
+    // Safety sync: Ensure Tone.js binds the notes to the newly updated track channels before compiling
+    currentMidi.tracks.forEach(t => {
+        t.notes.forEach(n => n.channel = t.channel);
+        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
     });
 
-    // ==================================================
-    // SWELL
-    // ==================================================
-    // Wurlitzer 125:
-    //
-    //   Swell  = MIDI Channel 4
-    //   Stops  = MIDI Channel 16
-    //
-    // Internally, CC4 is stored on the system track
-    // because the editor uses that track for timeline
-    // registration/expression events.
-    //
-    // For export, move CC4 to its REAL organ channel.
-    // ==================================================
-
-    const systemTrack = exportMidi.tracks.find(track =>
-        track.channel === 15 ||
-        (track.controlChanges[80] &&
-            track.controlChanges[80].length > 0) ||
-        (track.controlChanges[81] &&
-            track.controlChanges[81].length > 0)
-    );
-
-    if (systemTrack && systemTrack.controlChanges[swellCC]) {
-
-        // Wurlitzer 125 Swell = MIDI Channel 4
-        const swellEvents = systemTrack.controlChanges[swellCC];
-
-        if (swellEvents.length > 0) {
-
-            // Create a dedicated Swell track.
-            const swellTrack = exportMidi.addTrack();
-
-            // Tone.js uses zero-based channel numbers.
-            // 3 = MIDI Channel 4.
-            swellTrack.channel = 3;
-
-            swellEvents.forEach(event => {
-                swellTrack.controlChanges[swellCC].push({
-                    ticks: event.ticks,
-                    number: swellCC,
-                    value: event.value,
-                    time: event.time,
-                    channel: 3
-                });
-            });
-        }
-
-        // Remove CC4 from the Channel 16 system track.
-        // CC80/81 stay there.
-        delete systemTrack.controlChanges[swellCC];
-    }
-
-    // ==================================================
-    // EXPORT
-    // ==================================================
-
-    const blob = new Blob(
-        [exportMidi.toArray()],
-        { type: "audio/midi" }
-    );
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-
-    a.download =
-        fileName +
-        (currentOrganPreset === "wurlit125"
-            ? "_W125.mid"
-            : "_FAIRO.mid");
-
-    a.click();
-
-    setTimeout(() => {
-        URL.revokeObjectURL(a.href);
-    }, 1000);
-};
-
-
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-
-    a.download =
-        fileName +
-        (currentOrganPreset === "wurlit125"
-            ? "_W125.mid"
-            : "_FAIRO.mid");
-
-    a.click();
-
-    setTimeout(() => {
-        URL.revokeObjectURL(a.href);
-    }, 1000);
+    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+    const a = document.createElement("a"); 
+    a.href = URL.createObjectURL(blob); 
+    a.download = fileName + "_FAIRO.mid"; 
+    a.click(); 
 };
 
 // ==========================================
