@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIDI Mapper</title>
+    <title>W166 MIDI Mapper</title>
     
     <script src="https://unpkg.com/@tonejs/midi"></script>
 
@@ -13,58 +13,25 @@
 </head>
 <body class="hide-midi-vals">
 
-    <h1>EplayOrgan Map Stop Studio</h1>
+    <h1>Wurlitzer 166 Studio</h1>
 
-   <div class="tabs-nav">
-    <button class="tab-btn active" id="tab-import" onclick="openTab('page-import', this)">
-        1. Import & Routing
-    </button>
-
-    <button class="tab-btn locked" id="tab-editor" disabled>
-        2. Editor
-    </button>
-
-    <button class="tab-btn locked" id="tab-export" disabled>
-        3. History & Export
-    </button>
-
-    <button class="tab-btn" id="tab-settings" onclick="openTab('page-settings', this)">
-        4. Settings
-    </button>
-</div>
+    <div class="tabs-nav">
+        <button class="tab-btn active" id="tab-import" onclick="openTab('page-import', this)">1. Import & Routing</button>
+        <button class="tab-btn" id="tab-editor" onclick="openTab('page-editor', this)">2. Editor</button>
+        <button class="tab-btn" id="tab-export" onclick="openTab('page-export', this)">3. History & Export</button>
+        <button class="tab-btn" id="tab-settings" onclick="openTab('page-settings', this)">4. Settings</button>
+    </div>
 
     <div id="page-import" class="tab-content active">
         <div id="upload-panel" class="panel" style="text-align: center; padding: 40px 20px;">
             <h3>Select a MIDI File to Begin</h3>
-            <p style="color: #7f8c8d; margin-bottom: 20px;">Load your standard MIDI file to start mapping organ stops.</p>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Load your standard MIDI file to start mapping Wurlitzer stops.</p>
             <input type="file" id="midi-upload" accept=".mid,.midi" style="font-size: 1.1em; padding: 10px; border: 2px dashed #3498db; border-radius: 8px; background: var(--manual-bg); color: var(--text-color); cursor: pointer;">
-
         </div>
 
         <div id="routing-panel" class="panel" style="display: none;">
-
-    <div style="margin-bottom: 25px; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px;">
-        <label for="organ-preset"
-               style="display: block; font-weight: bold; margin-bottom: 8px;">
-            Choose Organ
-        </label>
-
-        <select id="organ-preset"
-        class="mapping-input"
-        style="width: 280px; padding: 10px; font-size: 1em;"
-        onchange="buildRoutingUI()">
-            <option value="">-- Select an Organ --</option>
-            <option value="wurlit166">Wurlitzer 166</option>
-            <option value="wurlit165">Wurlitzer 165</option>
-            <option value="wurlit153">Wurlitzer 153</option>
-            <option value="wurlit125">Wurlitzer 125</option>
-            <option value="fairo106">Fairo 106</option>
-            <option value="fairo109">Fairo 109</option>
-        </select>
-    </div>
-
-    <h3>Track Routing & Channel Setup</h3>
-            <p style="color: #7f8c8d; margin-bottom: 20px;">Assign your imported MIDI channels to the correct organ manuals. This ensures the exported file has the correct channel structure and descriptive DAW instruments.</p>
+            <h3>Track Routing & Channel Setup</h3>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Assign your imported MIDI channels to the correct Wurlitzer manuals. This ensures the exported file has the correct channel structure (Ch 1-4) and descriptive DAW instruments (e.g. Electric Piano, Trumpet).</p>
             
             <div id="routing-list" style="display: flex; flex-direction: column; gap: 8px;">
                 </div>
