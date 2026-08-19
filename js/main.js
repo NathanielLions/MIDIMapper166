@@ -585,20 +585,21 @@ let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
 
 let tremulantActive = false;
-let applyCoupledRegisters = false;
+let applyCoupledRegisters = true;
 applyCoupledRegisters = true;
 
 const COUPLED_REGISTERS = {
-    "Brass Register": [
-        "Tuba",
-        "Brass Trumpet",
-        "Octave"
-    ],
-
+    
     "Forte Register": [
         "Trombone",
         "Wooden Trumpet",
         "Strings 8"
+    ],
+
+    "Brass Register": [
+        "Tuba",
+        "Brass Trumpet",
+        "Octave"
     ],
 
     "Strings Register": [
