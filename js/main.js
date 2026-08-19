@@ -585,6 +585,33 @@ let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
 
 let tremulantActive = false;
+let applyCoupledRegisters = false;
+applyCoupledRegisters = false;
+
+const COUPLED_REGISTERS = {
+    "Brass Register": [
+        "Tuba",
+        "Brass Trumpet",
+        "Octave"
+    ],
+
+    "Forte Register": [
+        "Trombone",
+        "Wooden Trumpet",
+        "Strings 8"
+    ],
+
+    "Strings Register": [
+        "Cello",
+        "Celeste",
+        "Strings 4"
+    ],
+
+    "Octave Register": [
+        "Diaphone",
+        "Strings 16"
+    ]
+};
 
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
 let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
@@ -632,6 +659,39 @@ function toggleDarkMode(isDark) {
     else document.documentElement.removeAttribute('data-theme');
     draw(); 
 }
+
+window.toggleCoupledRegisters = function(isEnabled) {
+
+    applyCoupledRegisters = isEnabled;
+
+    if (applyCoupledRegisters) {
+
+        // The register system takes control of the
+        // eleven coupled stops.
+
+        Object.keys(COUPLED_REGISTERS).forEach(registerName => {
+
+            const stops = getCoupledStops(registerName);
+
+            const firstStop = getStopByName(stops[0]);
+
+            if (!firstStop) return;
+
+            const checkbox =
+                document.getElementById(`stop-${firstStop.val}`);
+
+            const state =
+                checkbox ? checkbox.checked : false;
+
+            setCoupledRegisterState(
+                registerName,
+                state
+            );
+        });
+    }
+
+    buildEditorUI();
+};
 
 function toggleMidiVals(show) {
     if (show) document.body.classList.remove('hide-midi-vals');
@@ -1066,6 +1126,151 @@ function updateTremulantVisuals() {
     });
 }
 
+function getCoupledRegisterForStop(stopName) {
+    if (!applyCoupledRegisters) return null;
+
+    for (const [registerName, stops] of Object.entries(COUPLED_REGISTERS)) {
+        if (stops.includes(stopName)) {
+            return registerName;
+        }
+    }
+
+    return null;
+}
+
+function getCoupledStops(registerName) {
+    return COUPLED_REGISTERS[registerName] || [];
+}
+
+function getStopByName(stopName) {
+    for (const stops of Object.values(organStructure)) {
+        const stop = stops.find(s => s.name === stopName);
+        if (stop) return stop;
+    }
+
+    return null;
+}
+
+function getCoupledRegisterState(registerName) {
+    const stops = getCoupledStops(registerName);
+
+    if (!stops.length) return false;
+
+    const firstStop = getStopByName(stops[0]);
+
+    if (!firstStop) return false;
+
+    const checkbox = document.getElementById(`stop-${firstStop.val}`);
+
+    return checkbox ? checkbox.checked : false;
+}
+
+function setCoupledRegisterState(registerName, isChecked) {
+    if (!applyCoupledRegisters) return;
+
+    const stopNames = getCoupledStops(registerName);
+
+    stopNames.forEach(stopName => {
+        const stop = getStopByName(stopName);
+
+        if (!stop) return;
+
+        const checkbox = document.getElementById(`stop-${stop.val}`);
+
+        if (checkbox) {
+            checkbox.checked = isChecked;
+        }
+    });
+}
+
+window.toggleCoupledRegister = function(registerName, isChecked) {
+    if (!applyCoupledRegisters) return;
+
+    const stopNames = getCoupledStops(registerName);
+
+    stopNames.forEach(stopName => {
+        const stop = getStopByName(stopName);
+
+        if (!stop) return;
+
+        // Update the physical stop checkbox.
+        const checkbox =
+            document.getElementById(`stop-${stop.val}`);
+
+        if (checkbox) {
+            checkbox.checked = isChecked;
+        }
+
+        // Find the manual this stop belongs to.
+        const manual =
+            Object.keys(organStructure).find(
+                manual =>
+                    organStructure[manual].some(
+                        s => s.val === stop.val
+                    )
+            );
+
+        if (!manual) return;
+
+        const shortManual = manual.split(' ')[0];
+
+        // Write the actual MIDI registration event.
+        handleStopToggle(
+            stop.val,
+            stop.name,
+            shortManual,
+            isChecked
+        );
+    });
+
+    updateCoupledRegisterVisuals();
+    renderLog();
+    draw();
+};
+
+function updateCoupledRegisterVisuals() {
+    if (!applyCoupledRegisters) return;
+
+    Object.keys(COUPLED_REGISTERS).forEach(registerName => {
+        const stops = getCoupledStops(registerName);
+
+        const firstStop = getStopByName(stops[0]);
+
+        if (!firstStop) return;
+
+        const checkbox = document.getElementById(
+            `stop-${firstStop.val}`
+        );
+
+        const registerSwitch = document.getElementById(
+            `coupled-register-${registerName}`
+        );
+
+        if (registerSwitch) {
+            registerSwitch.checked = checkbox ? checkbox.checked : false;
+        }
+
+        stops.forEach(stopName => {
+            const stop = getStopByName(stopName);
+
+            if (!stop) return;
+
+            const stopCheckbox =
+                document.getElementById(`stop-${stop.val}`);
+
+            if (!stopCheckbox) return;
+
+            stopCheckbox.disabled = true;
+
+            const row = stopCheckbox.closest('.stop-row');
+
+            if (row) {
+                row.style.opacity = "0.45";
+            }
+        });
+    });
+}
+
 function buildEditorUI() {
     document.getElementById('col-countermelody').innerHTML = '';
     document.getElementById('col-accomp-trumpet').innerHTML = '';
@@ -1119,30 +1324,33 @@ if (isTremulantStop) {
     row.dataset.tremulantStop = "true";
 }
 
-            row.innerHTML = `
-                <span class="stop-name">
-                    ${s.name}
-                    <span class="midi-val"
-                          style="color: #7f8c8d; font-weight: normal;">
-                        (${s.val})
-                    </span>
-                </span>
+            const coupledRegister = getCoupledRegisterForStop(s.name);
 
-                <label class="switch">
-                    <input
-                        type="checkbox"
-                        id="stop-${s.val}"
-                        onchange="handleStopToggle(
-                            ${s.val},
-                            '${s.name}',
-                            '${shortMan}',
-                            this.checked
-                        )"
-                    >
+row.innerHTML = `
+    <span class="stop-name">
+        ${s.name}
+        <span class="midi-val"
+              style="color: #7f8c8d; font-weight: normal;">
+            (${s.val})
+        </span>
+    </span>
 
-                   <span class="slider-switch"></span>
-                </label>
-            `;
+    <label class="switch">
+        <input
+            type="checkbox"
+            id="stop-${s.val}"
+            ${coupledRegister && applyCoupledRegisters ? 'disabled' : ''}
+            onchange="handleStopToggle(
+                ${s.val},
+                '${s.name}',
+                '${shortMan}',
+                this.checked
+            )"
+        >
+
+        <span class="slider-switch"></span>
+    </label>
+`;
 
             grid.appendChild(row);
         });
@@ -1161,6 +1369,76 @@ if (isTremulantStop) {
         }
     }
 
+    // ==========================================
+// COUPLED REGISTERS
+// ==========================================
+
+if (applyCoupledRegisters) {
+
+    const registerDiv = document.createElement('div');
+
+    registerDiv.className = 'manual-group';
+    registerDiv.style.borderLeftColor = '#f39c12';
+
+    let registerHtml = `
+        <h4 style="color:#f39c12;">
+            REGISTERS
+        </h4>
+
+        <div class="stop-grid">
+    `;
+
+    Object.keys(COUPLED_REGISTERS).forEach(registerName => {
+
+        const stops = getCoupledStops(registerName);
+        const firstStop = getStopByName(stops[0]);
+
+        if (!firstStop) return;
+
+        const currentCheckbox =
+            document.getElementById(`stop-${firstStop.val}`);
+
+        const checked =
+            currentCheckbox ? currentCheckbox.checked : false;
+
+        registerHtml += `
+            <div class="stop-row">
+
+                <span class="stop-name">
+                    ${registerName}
+                </span>
+
+                <label class="switch">
+
+                    <input
+                        type="checkbox"
+                        id="coupled-register-${registerName}"
+                        ${checked ? 'checked' : ''}
+                        onchange="toggleCoupledRegister(
+                            '${registerName}',
+                            this.checked
+                        )"
+                    >
+
+                    <span class="slider-switch"></span>
+
+                </label>
+
+            </div>
+        `;
+    });
+
+    registerHtml += `
+        </div>
+    `;
+
+    registerDiv.innerHTML = registerHtml;
+
+    document
+        .getElementById('col-countermelody')
+        .prepend(registerDiv);
+}
+    
     // ==========================================
     // EXPRESSION & PERCUSSION
     // ==========================================
@@ -1304,6 +1582,7 @@ if (isTremulantStop) {
     `;
 
     document.getElementById('col-pistons').innerHTML = pistonsHtml;
+    updateCoupledRegisterVisuals();
 
     // Apply the current Tremulant appearance
     updateTremulantVisuals();
