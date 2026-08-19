@@ -289,10 +289,10 @@ const DEFAULT_ORGAN_STRUCTURE = {
         },
 
         {
-            val: 18,
+            val: 11,
             name: "Stopped Flute",
             visible: true,
-            instrument: 18,
+            instrument: 11,
             octave: 0,
             volume: 1.0
         },
@@ -329,6 +329,15 @@ const DEFAULT_ORGAN_STRUCTURE = {
             name: "Strings 16",
             visible: true,
             instrument: 45,
+            octave: -12,
+            volume: 1.0
+        },
+        
+        {
+            val: 18,
+            name: "Diapasion",
+            visible: true,
+            instrument: 18,
             octave: -12,
             volume: 1.0
         }
