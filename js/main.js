@@ -586,6 +586,7 @@ let percCC = DEFAULT_PERC_CC;
 
 let tremulantActive = false;
 let applyCoupledRegisters = true;
+applyCoupledRegisters = true;
 
 const COUPLED_REGISTERS = {
     
@@ -1435,7 +1436,7 @@ if (applyCoupledRegisters) {
     registerDiv.innerHTML = registerHtml;
 
     document
-        .getElementById('col-pistons')
+        .getElementById('col-countermelody')
         .prepend(registerDiv);
 }
     
