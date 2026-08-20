@@ -1436,7 +1436,7 @@ if (applyCoupledRegisters) {
     registerDiv.innerHTML = registerHtml;
 
     document
-        .getElementById('col-countermelody')
+        .getElementById('col-pistons')
         .prepend(registerDiv);
 }
     
