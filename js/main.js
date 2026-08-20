@@ -586,7 +586,6 @@ let percCC = DEFAULT_PERC_CC;
 
 let tremulantActive = false;
 let applyCoupledRegisters = true;
-applyCoupledRegisters = true;
 
 const COUPLED_REGISTERS = {
     
