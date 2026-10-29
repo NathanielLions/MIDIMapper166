@@ -6,26 +6,70 @@ let isPlaying = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
-let synth;
+let synth = null;
+let synthReady = null;
 
-async function initAudio() {
+function initAudio() {
+    if (synthReady) return synthReady;
 
-    if (!synth) {
+    synthReady = (async () => {
+        const status = document.getElementById('audio-status');
+        try {
+            status.innerText = "⏳ Loading Virtual166.sf2...";
 
-        synth = new WebAudioTinySynth({
-            quality: 1,
-            useReverb: 1
-        });
+            audioCtx = new AudioContext();
 
-        audioCtx = synth.audioContext;
+            const { WorkletSynthesizer } =
+                await import("https://cdn.jsdelivr.net/npm/spessasynth_lib@4/+esm");
 
-        document.getElementById('audio-status').innerText =
-            "🔊 TinySynth Ready";
-    }
+            await audioCtx.audioWorklet.addModule(
+                "https://cdn.jsdelivr.net/npm/spessasynth_lib@4/dist/spessasynth_processor.min.js"
+            );
+
+            const raw = new WorkletSynthesizer(audioCtx);
+            raw.connect(audioCtx.destination);
+
+            // If your soundfont is in the same folder as your HTML file, keep this.
+            // Otherwise replace with:
+            // https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/Virtual166.sf2
+            const response = await fetch("Virtual166.sf2");
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const buffer = await response.arrayBuffer();
+
+            await raw.soundBankManager.addSoundBank(buffer, "main");
+            await raw.isReady;
+
+            synth = {
+                send([status, d1, d2]) {
+                    const ch = status & 0x0F;
+                    switch (status & 0xF0) {
+                        case 0x90:
+                            if (d2 > 0) raw.noteOn(ch, d1, d2);
+                            else raw.noteOff(ch, d1);
+                            break;
+                        case 0x80: raw.noteOff(ch, d1); break;
+                        case 0xC0: raw.programChange(ch, d1); break;
+                        case 0xB0: raw.controllerChange(ch, d1, d2); break;
+                    }
+                }
+            };
+
+            status.innerText = "🔊 Virtual166 Ready";
+        } catch (err) {
+            console.error(err);
+            synthReady = null;
+            status.innerText = "❌ Soundfont failed: " + err.message;
+        }
+    })();
+
+    return synthReady;
 }
 
 async function togglePlay() {
     await initAudio();
+    if (!synth) return alert("The soundfont didn't load. Press F12 and check the Console for the error.");
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+
     if (isPlaying) {
         isPlaying = false;
         document.getElementById('play-btn').innerText = "▶ Play";
@@ -34,7 +78,7 @@ async function togglePlay() {
         if (!currentMidi) return alert("Please import a MIDI file first!");
         isPlaying = true;
         document.getElementById('play-btn').innerText = "⏸ Pause";
-        
+
         let currentTick = parseInt(document.getElementById('tick-slider').value);
         startMidiSeconds = currentMidi.header.ticksToSeconds(currentTick);
         startTimeMs = performance.now();
@@ -56,17 +100,12 @@ function stopPlayback() {
 function killAllNotes() {
     if (synth) {
         for (let channel = 0; channel < 16; channel++) {
-            synth.send([
-                0xB0 + channel,
-                123,
-                0
-            ]);
+            synth.send([0xB0 + channel, 123, 0]); // all notes off
+            synth.send([0xB0 + channel, 120, 0]); // all sound off
         }
     }
-
     scheduledNotes.clear();
 }
-
 function scheduler() {
     if (!isPlaying || !currentMidi) return;
     
