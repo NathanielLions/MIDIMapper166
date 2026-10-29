@@ -202,44 +202,45 @@ function getInstrumentForStop(stop) {
     return stop.instrument || 0;
 }
 
+// Set to true only if you want the old octave shifts from the stop list.
+// The soundfont already limits each stop to a key range, so shifted notes
+// often land outside it and play nothing.
+const USE_CODE_OCTAVES = false;
+
 function scheduleNotePlay(note, channel, delaySeconds) {
+    // ---- PERCUSSION (MIDI channel 10 = index 9) ----
+    if (channel === 9) {
+        setTimeout(() => {
+            if (!synth) return;
+            const pc = document.getElementById(`stop-${percCC}`);
+            if (pc && !pc.checked) return;          // percussion switch is off
+            synth.send([0x99, note.midi, 127]);
+            setTimeout(() => synth.send([0x89, note.midi, 0]), note.duration * 1000);
+        }, delaySeconds * 1000);
+        return;
+    }
+
+    // ---- ORGAN STOPS ----
     const activeStops = getActiveStopsForNote(channel, note.midi);
 
     setTimeout(() => {
+        if (!synth) return;
         activeStops.forEach(stop => {
-            const finalMidi = note.midi + (stop.octave || 0);
-
-            const velocity = Math.min(
-                127,
-                Math.floor(
-                    ((note.velocity || 1) * 127) *
-                    (stop.volume || 1)
-                )
-            );
+            const finalMidi = note.midi + (USE_CODE_OCTAVES ? (stop.octave || 0) : 0);
+            if (finalMidi < 0 || finalMidi > 127) return;
 
             const program = getInstrumentForStop(stop);
 
-            synth.send([
-                0xC0 + channel,
-                program
-            ]);
-
-            synth.send([
-                0x90 + channel,
-                finalMidi,
-                velocity
-            ]);
+            synth.send([0xC0 + channel, program]);
+            synth.send([0x90 + channel, finalMidi, 127]);   // velocity always 127 (max)
 
             setTimeout(() => {
-                synth.send([
-                    0x80 + channel,
-                    finalMidi,
-                    0
-                ]);
+                synth.send([0x80 + channel, finalMidi, 0]);
             }, note.duration * 1000);
         });
     }, delaySeconds * 1000);
 }
+
 // ==========================================
 // TIME & DISPLAY ENGINE
 // ==========================================
