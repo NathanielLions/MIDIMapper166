@@ -1,108 +1,198 @@
 // ==========================================
-// 1. SOUNDFONT FETCH & AUDIO ENGINE STATE
+// 1. AUDIO ENGINE  (SpessaSynth + Virtual166.sf2)
+//
+//  - Every stop gets its own private synth channel, so stops never
+//    interfere with each other (no program-change juggling).
+//  - Which stops sound is read straight from the MIDI registration
+//    events (CC 80 = stop off, CC 81 = stop on) at the exact tick of
+//    each note, instead of waiting for the on-screen switches.
+//  - Output goes through a volume stage + limiter so a full
+//    registration never clips.
 // ==========================================
-let audioCtx;
+
+const SOUNDFONT_URL      = "Virtual166.sf2";
+const SPESSA_LIB_URL     = "https://cdn.jsdelivr.net/npm/spessasynth_lib@4.4.1/+esm";
+const SPESSA_WORKLET_URL = "https://cdn.jsdelivr.net/npm/spessasynth_lib@4.4.1/dist/spessasynth_processor.min.js";
+
+const NOTE_VELOCITY      = 127;  // every note plays at the maximum velocity
+const FIRST_STOP_CHANNEL = 16;   // synth channels 0-15 stay as normal MIDI channels
+const STOP_CHANNELS      = 48;   // private channels, one per stop
+const PERCUSSION_CHANNEL = 9;    // MIDI channel 10 (drums)
+
+const MASTER_GAIN        = 0.35; // volume before the limiter
+const MAKEUP_GAIN        = 2.5;  // volume after the limiter (keep at 3 or below)
+
+let audioCtx = null;
+let rawSynth = null;             // the real SpessaSynth synthesizer
+let synth = null;                // same object, kept under the old name
+let synthReady = null;
+let useDedicatedChannels = false;
+let stopChannelLimit = FIRST_STOP_CHANNEL;
+
 let isPlaying = false;
+let isStarting = false;
 let startTimeMs = 0;
 let startMidiSeconds = 0;
 let scheduledNotes = new Set();
-let synth = null;
-let synthReady = null;
 
+let schedulerTimer = null;
+let lastUiUpdate = 0;
+let registrationTimeline = [];
+
+const pendingTimers = new Set();
+const noteGeneration = new Map();
+const stopChannelMap = new Map();   // stop CC value -> synth channel
+const channelProgram = new Map();   // synth channel -> program currently loaded
+const channelVolume = new Map();    // synth channel -> CC7 value currently set
+let nextStopChannel = FIRST_STOP_CHANNEL;
+
+function setAudioStatus(text) {
+    const el = document.getElementById('audio-status');
+    if (el) el.innerText = text;
+}
+
+function later(fn, delayMs) {
+    const id = setTimeout(() => {
+        pendingTimers.delete(id);
+        fn();
+    }, Math.max(0, delayMs));
+    pendingTimers.add(id);
+    return id;
+}
+
+// ------------------------------------------
+// Start-up
+// ------------------------------------------
 function initAudio() {
     if (synthReady) return synthReady;
 
     synthReady = (async () => {
-        const status = document.getElementById('audio-status');
         try {
-            status.innerText = "⏳ Loading Virtual166.sf2...";
+            setAudioStatus("⏳ Loading Virtual166.sf2...");
 
             audioCtx = new AudioContext();
 
-            const { WorkletSynthesizer } =
-                await import("https://cdn.jsdelivr.net/npm/spessasynth_lib@4/+esm");
+            const { WorkletSynthesizer } = await import(SPESSA_LIB_URL);
+            await audioCtx.audioWorklet.addModule(SPESSA_WORKLET_URL);
 
-            await audioCtx.audioWorklet.addModule(
-                "https://cdn.jsdelivr.net/npm/spessasynth_lib@4/dist/spessasynth_processor.min.js"
-            );
+            const engine = new WorkletSynthesizer(audioCtx);
 
-            const raw = new WorkletSynthesizer(audioCtx);
-            // Lower the volume and limit peaks so many stops together don't clip
-const inGain = audioCtx.createGain();
-inGain.gain.value = 0.35;
-const limiter = audioCtx.createDynamicsCompressor();
-limiter.threshold.value = -24;
-limiter.knee.value = 12;
-limiter.ratio.value = 12;
-limiter.attack.value = 0.003;
-limiter.release.value = 0.2;
-const makeup = audioCtx.createGain();
-makeup.gain.value = 2.5;
-raw.connect(inGain);
-inGain.connect(limiter);
-limiter.connect(makeup);
-makeup.connect(audioCtx.destination);
-
-            // If your soundfont is in the same folder as your HTML file, keep this.
-            // Otherwise replace with:
-            // https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/Virtual166.sf2
-            const response = await fetch("Virtual166.sf2");
-            if (!response.ok) throw new Error("HTTP " + response.status);
-            const buffer = await response.arrayBuffer();
-
-            await raw.soundBankManager.addSoundBank(buffer, "main");
-            await raw.isReady;
-
-            synth = {
-                send([status, d1, d2]) {
-                    const ch = status & 0x0F;
-                    switch (status & 0xF0) {
-                        case 0x90:
-                            if (d2 > 0) raw.noteOn(ch, d1, d2);
-                            else raw.noteOff(ch, d1);
-                            break;
-                        case 0x80: raw.noteOff(ch, d1); break;
-                        case 0xC0: raw.programChange(ch, d1); break;
-                        case 0xB0: raw.controllerChange(ch, d1, d2); break;
-                    }
+            // The library can announce a new channel's settings a moment before it
+            // announces the channel itself. That harmless ordering hiccup is ignored.
+            const originalReceive = engine.receiveEventCallback.bind(engine);
+            engine.receiveEventCallback = (event) => {
+                try {
+                    originalReceive(event);
+                } catch (err) {
+                    if (!(err instanceof TypeError)) throw err;
                 }
             };
 
-            status.innerText = "🔊 Virtual166 Ready";
+            // Volume stage -> limiter -> speakers
+            const inGain = audioCtx.createGain();
+            inGain.gain.value = MASTER_GAIN;
+
+            const limiter = audioCtx.createDynamicsCompressor();
+            limiter.threshold.value = -24;
+            limiter.knee.value = 12;
+            limiter.ratio.value = 12;
+            limiter.attack.value = 0.003;
+            limiter.release.value = 0.2;
+
+            const makeup = audioCtx.createGain();
+            makeup.gain.value = MAKEUP_GAIN;
+
+            engine.connect(inGain);
+            inGain.connect(limiter);
+            limiter.connect(makeup);
+            makeup.connect(audioCtx.destination);
+
+            // Soundfont
+            const response = await fetch(SOUNDFONT_URL);
+            if (!response.ok) {
+                throw new Error("could not download " + SOUNDFONT_URL + " (HTTP " + response.status + ")");
+            }
+            await engine.soundBankManager.addSoundBank(await response.arrayBuffer(), "main");
+            await engine.isReady;
+
+            // One private channel per stop (created one at a time so the
+            // library always knows a channel before it is used)
+            for (let i = 0; i < STOP_CHANNELS; i++) {
+                const before = engine.midiChannels.length;
+                engine.addNewChannel();
+                const waitStart = performance.now();
+                while (engine.midiChannels.length <= before && performance.now() - waitStart < 1500) {
+                    await new Promise(r => setTimeout(r, 10));
+                }
+                if (engine.midiChannels.length <= before) break;
+            }
+            stopChannelLimit = engine.midiChannels.length;
+            useDedicatedChannels = stopChannelLimit > FIRST_STOP_CHANNEL;
+
+            rawSynth = engine;
+            synth = engine;
+
+            setAudioStatus("🔊 Virtual166 Ready");
         } catch (err) {
-            console.error(err);
+            console.error("Audio engine failed:", err);
             synthReady = null;
-            status.innerText = "❌ Soundfont failed: " + err.message;
+            rawSynth = null;
+            synth = null;
+            setAudioStatus("❌ Audio failed: " + err.message);
         }
     })();
 
     return synthReady;
 }
 
+// ------------------------------------------
+// Transport
+// ------------------------------------------
 async function togglePlay() {
-    await initAudio();
-    if (!synth) return alert("The soundfont didn't load. Press F12 and check the Console for the error.");
-    if (audioCtx.state === "suspended") await audioCtx.resume();
-
     if (isPlaying) {
         isPlaying = false;
+        if (schedulerTimer) { clearTimeout(schedulerTimer); schedulerTimer = null; }
         document.getElementById('play-btn').innerText = "▶ Play";
         killAllNotes();
-    } else {
-        if (!currentMidi) return alert("Please import a MIDI file first!");
+        return;
+    }
+
+    if (isStarting) return;
+    isStarting = true;
+
+    try {
+        await initAudio();
+        if (!synth) {
+            alert("The soundfont didn't load. Press F12 and check the Console for the error.");
+            return;
+        }
+        if (audioCtx.state === "suspended") await audioCtx.resume();
+
+        if (!currentMidi) {
+            alert("Please import a MIDI file first!");
+            return;
+        }
+
         isPlaying = true;
         document.getElementById('play-btn').innerText = "⏸ Pause";
 
-        let currentTick = parseInt(document.getElementById('tick-slider').value);
+        const currentTick = parseInt(document.getElementById('tick-slider').value);
         startMidiSeconds = currentMidi.header.ticksToSeconds(currentTick);
         startTimeMs = performance.now();
-        scheduledNotes.clear();
+        lastUiUpdate = 0;
+        killAllNotes();
+
+        if (schedulerTimer) clearTimeout(schedulerTimer);
         scheduler();
+    } finally {
+        isStarting = false;
     }
 }
 
 function stopPlayback() {
     isPlaying = false;
+    if (schedulerTimer) { clearTimeout(schedulerTimer); schedulerTimer = null; }
+
     document.getElementById('play-btn').innerText = "▶ Play";
     document.getElementById('tick-slider').value = 0;
     updateDisplays(0);
@@ -112,148 +202,248 @@ function stopPlayback() {
 }
 
 function killAllNotes() {
-    if (synth) {
-        for (let channel = 0; channel < 16; channel++) {
-            synth.send([0xB0 + channel, 123, 0]); // all notes off
-            synth.send([0xB0 + channel, 120, 0]); // all sound off
-        }
-    }
+    pendingTimers.forEach(id => clearTimeout(id));
+    pendingTimers.clear();
     scheduledNotes.clear();
+    noteGeneration.clear();
+
+    if (rawSynth) {
+        const total = Math.max(16, rawSynth.midiChannels.length);
+        for (let ch = 0; ch < total; ch++) {
+            rawSynth.controllerChange(ch, 123, 0);   // all notes off
+        }
+    }
 }
+
+// ------------------------------------------
+// Scheduler: runs every 25 ms, plays notes slightly ahead of time
+// ------------------------------------------
 function scheduler() {
+    schedulerTimer = null;
     if (!isPlaying || !currentMidi) return;
-    
-    let now = performance.now();
-    let elapsedSeconds = (now - startTimeMs) / 1000;
-    let currentMidiSeconds = startMidiSeconds + elapsedSeconds;
-    
-    let newTick = Math.round(currentMidi.header.secondsToTicks(currentMidiSeconds));
-    let sliderMax = parseInt(document.getElementById('tick-slider').max);
-    
-    if (newTick > sliderMax) { stopPlayback(); return; }
-    
-    document.getElementById('tick-slider').value = newTick;
-    updateDisplays(newTick);
-    syncSwitchesToTimeline(newTick);
-    draw();
-    
-    let lookaheadSeconds = 0.1; 
-    let lookaheadMidiSeconds = currentMidiSeconds + lookaheadSeconds;
-    
-    currentMidi.tracks.forEach(track => {
-        if (hiddenChannels.has(track.channel)) return;
-        track.notes.forEach(note => {
-            if (note.time >= currentMidiSeconds && note.time < lookaheadMidiSeconds) {
-                let noteId = `${track.channel}-${note.midi}-${note.ticks}`;
-                if (!scheduledNotes.has(noteId)) {
-                    scheduledNotes.add(noteId);
-                    scheduleNotePlay(note, track.channel, note.time - currentMidiSeconds); 
-                }
-            }
-        });
-    });
-    
-    requestAnimationFrame(scheduler);
-}
 
-function getActiveStopsForNote(channel, midiNote) {
+    const nowMs = performance.now();
+    const currentMidiSeconds = startMidiSeconds + (nowMs - startTimeMs) / 1000;
+    const newTick = Math.round(currentMidi.header.secondsToTicks(currentMidiSeconds));
+    const slider = document.getElementById('tick-slider');
 
-    let activeStops = [];
-
-    for (const [manual, stops] of Object.entries(organStructure)) {
-
-        let match = manual.match(/Ch (\d+)/);
-
-        if (!match) continue;
-
-        let rawChannel = parseInt(match[1]) - 1;
-
-        if (rawChannel !== channel) continue;
-
-        // =====================================
-        // NOTE RANGE SPLITTING
-        // =====================================
-
-        if (
-            manual.includes("Bass") &&
-            (midiNote < 36 || midiNote > 48)
-        ) {
-            continue;
-        }
-
-        if (
-            manual.includes("Countermelody") &&
-            (midiNote < 65 || midiNote > 96)
-        ) {
-            continue;
-        }
-
-        stops.forEach(s => {
-
-            if (s.visible === false) return;
-
-            let cb = document.getElementById(`stop-${s.val}`);
-
-            if (cb && cb.checked) {
-                activeStops.push(s);
-            }
-
-        });
-    }
-
-    return activeStops;
-}
-
-function getInstrumentForStop(stop) {
-    if (
-        tremulantActive &&
-        stop.tremulantInstrument !== undefined &&
-        stop.tremulantInstrument !== null
-    ) {
-        return stop.tremulantInstrument;
-    }
-
-    return stop.instrument || 0;
-}
-
-// Set to true only if you want the old octave shifts from the stop list.
-// The soundfont already limits each stop to a key range, so shifted notes
-// often land outside it and play nothing.
-const USE_CODE_OCTAVES = false;
-
-function scheduleNotePlay(note, channel, delaySeconds) {
-    // ---- PERCUSSION (MIDI channel 10 = index 9) ----
-    if (channel === 9) {
-        setTimeout(() => {
-            if (!synth) return;
-            const pc = document.getElementById(`stop-${percCC}`);
-            if (pc && !pc.checked) return;          // percussion switch is off
-            synth.send([0x99, note.midi, 127]);
-            setTimeout(() => synth.send([0x89, note.midi, 0]), note.duration * 1000);
-        }, delaySeconds * 1000);
+    if (newTick > parseInt(slider.max)) {
+        stopPlayback();
         return;
     }
 
-    // ---- ORGAN STOPS ----
-    const activeStops = getActiveStopsForNote(channel, note.midi);
+    // Screen update (switches, slider, piano roll) about 30 times a second
+    if (nowMs - lastUiUpdate >= 33) {
+        lastUiUpdate = nowMs;
+        slider.value = newTick;
+        updateDisplays(newTick);
+        syncSwitchesToTimeline(newTick);
+        draw();
+    }
 
-    setTimeout(() => {
-        if (!synth) return;
-        activeStops.forEach(stop => {
-            const finalMidi = note.midi + (USE_CODE_OCTAVES ? (stop.octave || 0) : 0);
-            if (finalMidi < 0 || finalMidi > 127) return;
+    // Notes: look ahead a little (more when the tab is in the background,
+    // because browsers slow timers down there).
+    const lookahead = document.hidden ? 1.5 : 0.25;
+    const horizon = currentMidiSeconds + lookahead;
 
-            const program = getInstrumentForStop(stop);
+    refreshRegistrationTimeline();
 
-            synth.send([0xC0 + channel, program]);
-            synth.send([0x90 + channel, finalMidi, 127]);   // velocity always 127 (max)
+    currentMidi.tracks.forEach(track => {
+        if (hiddenChannels.has(track.channel)) return;
 
-            setTimeout(() => {
-                synth.send([0x80 + channel, finalMidi, 0]);
-            }, note.duration * 1000);
+        track.notes.forEach(note => {
+            if (note.time < currentMidiSeconds - 0.05 || note.time >= horizon) return;
+
+            const noteId = `${track.channel}-${note.midi}-${note.ticks}`;
+            if (scheduledNotes.has(noteId)) return;
+            scheduledNotes.add(noteId);
+
+            scheduleNotePlay(note, track.channel, Math.max(0, note.time - currentMidiSeconds));
         });
-    }, delaySeconds * 1000);
+    });
+
+    schedulerTimer = setTimeout(scheduler, 25);
 }
+
+// ------------------------------------------
+// Registration (which stops are on) read from the MIDI itself
+// ------------------------------------------
+function refreshRegistrationTimeline() {
+    registrationTimeline = [];
+
+    const track = getSystemTrack();
+    if (!track) return;
+
+    // CC 80 = stop OFF, CC 81 = stop ON (value = the stop's number).
+    // OFF is added first so that ON wins when both happen on the same tick.
+    [80, 81].forEach(cc => {
+        (track.controlChanges[cc] || []).forEach(e => {
+            registrationTimeline.push({
+                cc: cc,
+                val: Math.round(e.value * 127),
+                ticks: e.ticks
+            });
+        });
+    });
+
+    registrationTimeline.sort((a, b) => a.ticks - b.ticks);
+}
+
+function getRegistrationAtTick(tick) {
+    const states = {};
+
+    for (const e of registrationTimeline) {
+        if (e.ticks > tick) break;
+        states[e.val] = (e.cc === 81);
+    }
+
+    // Tremulant is on whenever one of the "Tr..." versions is registered.
+    let tremulant = false;
+    const counterStops = organStructure["Countermelody (Ch 4)"] || [];
+    counterStops.forEach(s => {
+        if (s.tremulantInstrument !== undefined &&
+            s.tremulantInstrument !== null &&
+            states[s.tremulantInstrument]) {
+            tremulant = true;
+        }
+    });
+
+    return { states, tremulant, percussion: !!states[percCC] };
+}
+
+function getActiveStopsForNote(channel, midiNote, reg) {
+    const result = [];
+
+    for (const [manual, stops] of Object.entries(organStructure)) {
+        const match = manual.match(/Ch (\d+)/);
+        if (!match) continue;
+        if (parseInt(match[1]) - 1 !== channel) continue;
+
+        // Note range of each division
+        if (manual.includes("Bass") && (midiNote < 36 || midiNote > 48)) continue;
+        if (manual.includes("Countermelody") && (midiNote < 65 || midiNote > 96)) continue;
+
+        stops.forEach(s => {
+            if (s.visible === false) return;
+
+            const hasTrem = s.tremulantInstrument !== undefined &&
+                            s.tremulantInstrument !== null;
+
+            const on = !!reg.states[s.val] ||
+                       (reg.tremulant && hasTrem && !!reg.states[s.tremulantInstrument]);
+            if (!on) return;
+
+            result.push({
+                stop: s,
+                program: (reg.tremulant && hasTrem) ? s.tremulantInstrument : (s.instrument || 0)
+            });
+        });
+    }
+
+    return result;
+}
+
+// Kept for compatibility with older code
+function getInstrumentForStop(stop) {
+    if (tremulantActive &&
+        stop.tremulantInstrument !== undefined &&
+        stop.tremulantInstrument !== null) {
+        return stop.tremulantInstrument;
+    }
+    return stop.instrument || 0;
+}
+
+// ------------------------------------------
+// Sounding notes
+// ------------------------------------------
+function getStopChannel(stop, manualChannel) {
+    if (!useDedicatedChannels) return manualChannel;
+
+    let ch = stopChannelMap.get(stop.val);
+    if (ch === undefined) {
+        if (nextStopChannel >= stopChannelLimit) {
+            return manualChannel;            // out of private channels
+        }
+        ch = nextStopChannel++;
+        stopChannelMap.set(stop.val, ch);
+    }
+    return ch;
+}
+
+function triggerStopNote(stop, manualChannel, midi, program, durationMs) {
+    if (!rawSynth) return;
+
+    const ch = getStopChannel(stop, manualChannel);
+    const shared = ch < FIRST_STOP_CHANNEL;
+
+    // A shared channel must reload its program before every note;
+    // a private channel only when the program really changes (tremulant).
+    if (shared || channelProgram.get(ch) !== program) {
+        rawSynth.programChange(ch, program);
+        channelProgram.set(ch, program);
+    }
+
+    if (!shared) {
+        const vol = Math.max(0, Math.min(127, Math.round(100 * (stop.volume !== undefined ? stop.volume : 1))));
+        if (channelVolume.get(ch) !== vol) {
+            rawSynth.controllerChange(ch, 7, vol);
+            channelVolume.set(ch, vol);
+        }
+    }
+
+    // If the same key is struck again before the first note ended, only the
+    // newest note is allowed to release it.
+    const key = ch * 128 + midi;
+    const generation = (noteGeneration.get(key) || 0) + 1;
+    noteGeneration.set(key, generation);
+
+    rawSynth.noteOn(ch, midi, NOTE_VELOCITY);
+
+    later(() => {
+        if (noteGeneration.get(key) === generation) {
+            rawSynth.noteOff(ch, midi);
+            noteGeneration.delete(key);
+        }
+    }, Math.max(durationMs, 30));
+}
+
+function triggerPercussionNote(midi, durationMs) {
+    if (!rawSynth) return;
+
+    rawSynth.noteOn(PERCUSSION_CHANNEL, midi, NOTE_VELOCITY);
+    later(() => rawSynth.noteOff(PERCUSSION_CHANNEL, midi), Math.max(durationMs, 30));
+}
+
+function scheduleNotePlay(note, channel, delaySeconds) {
+    const delayMs = delaySeconds * 1000;
+    const durationMs = note.duration * 1000;
+    const reg = getRegistrationAtTick(note.ticks);
+
+    // Percussion (MIDI channel 10) follows the Percussion Master switch
+    if (channel === PERCUSSION_CHANNEL) {
+        if (reg.percussion) {
+            later(() => triggerPercussionNote(note.midi, durationMs), delayMs);
+        }
+        return;
+    }
+
+    getActiveStopsForNote(channel, note.midi, reg).forEach(({ stop, program }) => {
+        later(() => triggerStopNote(stop, channel, note.midi, program, durationMs), delayMs);
+    });
+}
+
+// Type organDebug() in the browser console to see the engine's state.
+window.organDebug = function () {
+    console.log({
+        ready: !!rawSynth,
+        privateChannels: useDedicatedChannels,
+        channelsInSynth: rawSynth ? rawSynth.midiChannels.length : 0,
+        audioState: audioCtx ? audioCtx.state : "none",
+        playing: isPlaying,
+        stopChannels: Object.fromEntries(stopChannelMap),
+        pendingNotes: pendingTimers.size
+    });
+};
 
 // ==========================================
 // TIME & DISPLAY ENGINE
