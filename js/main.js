@@ -27,7 +27,21 @@ function initAudio() {
             );
 
             const raw = new WorkletSynthesizer(audioCtx);
-            raw.connect(audioCtx.destination);
+            // Lower the volume and limit peaks so many stops together don't clip
+const inGain = audioCtx.createGain();
+inGain.gain.value = 0.35;
+const limiter = audioCtx.createDynamicsCompressor();
+limiter.threshold.value = -24;
+limiter.knee.value = 12;
+limiter.ratio.value = 12;
+limiter.attack.value = 0.003;
+limiter.release.value = 0.2;
+const makeup = audioCtx.createGain();
+makeup.gain.value = 2.5;
+raw.connect(inGain);
+inGain.connect(limiter);
+limiter.connect(makeup);
+makeup.connect(audioCtx.destination);
 
             // If your soundfont is in the same folder as your HTML file, keep this.
             // Otherwise replace with:
