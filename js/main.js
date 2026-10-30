@@ -20,15 +20,22 @@ const STOP_CHANNELS      = 48;   // private channels, one per stop
 const PERCUSSION_CHANNEL = 9;    // MIDI channel 10 (drums)
 
 // Accordion registers (Bandoneon, Musette, Clarinet, Bassoon, Master).
-//  - Each register is ONE stop that sounds in BOTH the melody (Trumpetmelody,
-//    Ch 3) and the countermelody (Ch 4), using its own soundfont program in each.
-//  - Only ONE accordion register can be on at a time. Switching one on switches
-//    the others off, so melody and countermelody can never use different registers.
+//  - Each register is TWO real stops in the organ setup: one in the Swell
+//    (melody, Ch 3) and one in the Great (countermelody, Ch 4).
+//      "val"        = the Swell stop number   (63-67)
+//      "counterVal" = the Great stop number   (51-55)
+//    The editor shows ONE switch per register and writes both stops for you.
+//  - Only ONE register can be on at a time (all of its stops go off when another
+//    register is switched on), so the Swell and the Great can never end up on
+//    different registers.
+//  - "Plays in" chooses which of the register's stops are written:
+//    both (default), melody (Swell) only, or countermelody (Great) only.
 const ACCORDION_KEY       = "Accordion (Ch 3+4)";
-const MELODY_CHANNEL      = 2;   // synth channel index of Trumpetmelody (Ch 3)
+const MELODY_CHANNEL      = 2;   // synth channel index of Trumpetmelody / Swell (Ch 3)
 const COUNTER_CHANNEL     = 3;   // synth channel index of Countermelody / Bass (Ch 4)
 const COUNTER_RANGE_LOW   = 65;  // countermelody note range (Bass is 36-48)
 const COUNTER_RANGE_HIGH  = 96;
+let accordionDivisionMode = "both";   // "both" | "melody" | "counter"
 
 const MASTER_GAIN        = 0.35; // volume before the limiter
 const MAKEUP_GAIN        = 2.5;  // volume after the limiter (keep at 3 or below)
@@ -307,19 +314,29 @@ function getAccordionStops() {
     return organStructure[ACCORDION_KEY] || [];
 }
 
-function isAccordionVal(val) {
-    return getAccordionStops().some(s => s.val === val);
+// The accordion register that owns this stop number (Swell OR Great stop).
+function getAccordionRegisterByVal(val) {
+    return getAccordionStops().find(s => s.val === val || s.counterVal === val);
 }
 
-// Sets one stop on/off in a states object. Turning an accordion register ON
-// turns every other accordion register OFF (only one can sound at a time).
+function isAccordionVal(val) {
+    return !!getAccordionRegisterByVal(val);
+}
+
+// Sets one stop on/off in a states object. Turning an accordion stop ON turns
+// every stop of every OTHER accordion register OFF (only one register at a time).
 function setStopState(states, val, on) {
     states[val] = on;
-    if (on && isAccordionVal(val)) {
-        getAccordionStops().forEach(s => {
-            if (s.val !== val) states[s.val] = false;
-        });
-    }
+    if (!on) return;
+
+    const owner = getAccordionRegisterByVal(val);
+    if (!owner) return;
+
+    getAccordionStops().forEach(other => {
+        if (other === owner) return;
+        states[other.val] = false;
+        if (other.counterVal !== undefined) states[other.counterVal] = false;
+    });
 }
 
 function getRegistrationAtTick(tick) {
@@ -377,14 +394,15 @@ function getActiveStopsForNote(channel, midiNote, reg) {
         });
     }
 
-    // Accordion: the register that is on plays in the melody AND the
-    // countermelody. Same register in both, only the soundfont program differs.
+    // Accordion: the Swell stop of the register that is on sounds in the melody,
+    // its Great stop sounds in the countermelody. The register is always the same
+    // one in both; only the soundfont program differs.
     getAccordionStops().forEach(s => {
-        if (s.visible === false || !reg.states[s.val]) return;
+        if (s.visible === false) return;
 
-        if (channel === MELODY_CHANNEL) {
+        if (channel === MELODY_CHANNEL && reg.states[s.val]) {
             result.push({ stop: s, program: s.melodyInstrument || 0 });
-        } else if (channel === COUNTER_CHANNEL &&
+        } else if (channel === COUNTER_CHANNEL && reg.states[s.counterVal] &&
                    midiNote >= COUNTER_RANGE_LOW && midiNote <= COUNTER_RANGE_HIGH) {
             result.push({ stop: s, program: s.counterInstrument || 0 });
         }
@@ -682,12 +700,14 @@ const DEFAULT_ORGAN_STRUCTURE = {
         }
     ],
 
-    // One register at a time. "val" is the registration number (CC 80/81) and is
-    // also the melody program; counterInstrument is the countermelody program.
+    // One switch per register. "val" = Swell stop (melody), "counterVal" = Great
+    // stop (countermelody); melodyInstrument / counterInstrument = soundfont
+    // programs used by this editor's own playback.
     "Accordion (Ch 3+4)": [
 
         {
             val: 63,
+            counterVal: 51,
             name: "Bandoneon",
             visible: true,
             melodyInstrument: 63,
@@ -698,6 +718,7 @@ const DEFAULT_ORGAN_STRUCTURE = {
 
         {
             val: 64,
+            counterVal: 52,
             name: "Musette",
             visible: true,
             melodyInstrument: 64,
@@ -708,6 +729,7 @@ const DEFAULT_ORGAN_STRUCTURE = {
 
         {
             val: 65,
+            counterVal: 53,
             name: "Accordion Clarinet",
             visible: true,
             melodyInstrument: 65,
@@ -718,6 +740,7 @@ const DEFAULT_ORGAN_STRUCTURE = {
 
         {
             val: 66,
+            counterVal: 54,
             name: "Accordion Bassoon",
             visible: true,
             melodyInstrument: 66,
@@ -728,6 +751,7 @@ const DEFAULT_ORGAN_STRUCTURE = {
 
         {
             val: 67,
+            counterVal: 55,
             name: "Accordion Master",
             visible: true,
             melodyInstrument: 67,
@@ -1073,13 +1097,16 @@ function getOrCreateSystemTrack() {
 }
 
 window.addRank = function(manualKey) {
-    let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
+    let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81])
+        .concat(getAccordionStops().map(s => s.counterVal).filter(v => v !== undefined));
     let newVal = 21; 
     while (usedCCs.includes(newVal) && newVal < 120) { newVal++; }
     
     if (manualKey === ACCORDION_KEY) {
-        organStructure[manualKey].push({ val: newVal, name: "New Accordion Register", visible: true,
-                                         melodyInstrument: newVal, counterInstrument: newVal,
+        let counterVal = newVal + 1;
+        while (usedCCs.includes(counterVal) && counterVal < 120) { counterVal++; }
+        organStructure[manualKey].push({ val: newVal, counterVal: counterVal, name: "New Accordion Register",
+                                         visible: true, melodyInstrument: newVal, counterInstrument: counterVal,
                                          octave: 0, volume: 1.0 });
     } else {
         organStructure[manualKey].push({ val: newVal, name: "New Stop", visible: true });
@@ -1098,19 +1125,25 @@ window.deleteRank = function(manualKey, index) {
     }
 };
 
-// Settings row for an accordion register: melody program + countermelody program.
+// Settings row for an accordion register. The main number box is the Swell stop;
+// here: soundfont programs for melody / countermelody and the Great stop number.
 function accordionProgramInputs(manual, i, s) {
-    return `<span style="display:flex; align-items:center; gap:4px; width:180px; font-size:0.75em;">
+    return `<span style="display:flex; align-items:center; gap:4px; font-size:0.75em;">
         Mel
-        <input type="number" min="0" max="127" class="mapping-input" style="width:55px;"
+        <input type="number" min="0" max="127" class="mapping-input" style="width:50px;"
             value="${s.melodyInstrument || 0}"
             onchange="updateMapping('${manual}', ${i}, 'melodyInstrument', this.value)"
-            title="Soundfont program used in the melody (Trumpetmelody, Ch 3)">
+            title="Soundfont program used for melody notes (Swell)">
         Ctr
-        <input type="number" min="0" max="127" class="mapping-input" style="width:55px;"
+        <input type="number" min="0" max="127" class="mapping-input" style="width:50px;"
             value="${s.counterInstrument || 0}"
             onchange="updateMapping('${manual}', ${i}, 'counterInstrument', this.value)"
-            title="Soundfont program used in the countermelody (Ch 4)">
+            title="Soundfont program used for countermelody notes (Great)">
+        Great stop
+        <input type="number" min="0" max="127" class="mapping-input" style="width:50px;"
+            value="${s.counterVal !== undefined ? s.counterVal : ''}"
+            onchange="updateMapping('${manual}', ${i}, 'counterVal', this.value)"
+            title="Stop number of this register in the Great (the main number box is its Swell stop)">
     </span>`;
 }
 
@@ -1436,7 +1469,7 @@ window.setTriState = function(val, targetState, type) {
             p.activeStops.push(val);
 
             // A piston can only switch ONE accordion register on.
-            if (isAccordionVal(val)) {
+            if (getAccordionStops().some(s => s.val === val)) {
                 getAccordionStops().forEach(other => {
                     if (other.val === val) return;
                     if (p.activeStops.includes(other.val)) {
@@ -1459,7 +1492,8 @@ window.updateMapping = function(manual, index, field, value) {
 
     else if (field === 'instrument' ||
              field === 'melodyInstrument' ||
-             field === 'counterInstrument') {
+             field === 'counterInstrument' ||
+             field === 'counterVal') {
         organStructure[manual][index][field] = parseInt(value);
     }
 
@@ -1748,6 +1782,23 @@ row.innerHTML = `
             grid.appendChild(row);
         });
 
+        // Accordion: choose where the register plays (written as real stops).
+        if (shortMan === "Accordion") {
+            const modeRow = document.createElement('div');
+            modeRow.className = 'stop-row';
+            modeRow.innerHTML = `
+                <span class="stop-name">Plays in</span>
+                <select id="accordion-division" class="mapping-input"
+                        style="width: 200px; cursor: pointer;"
+                        onchange="handleAccordionDivisionChange(this.value)">
+                    <option value="both" ${accordionDivisionMode === 'both' ? 'selected' : ''}>Melody + Countermelody</option>
+                    <option value="melody" ${accordionDivisionMode === 'melody' ? 'selected' : ''}>Melody (Swell) only</option>
+                    <option value="counter" ${accordionDivisionMode === 'counter' ? 'selected' : ''}>Countermelody (Great) only</option>
+                </select>
+            `;
+            groupDiv.appendChild(modeRow);
+        }
+
         if (shortMan === "Countermelody") {
             document.getElementById('col-countermelody').appendChild(groupDiv);
         }
@@ -1987,7 +2038,8 @@ if (applyCoupledRegisters) {
 // ==========================================
 function getUnknownStops(track) {
     if (!track) return [];
-    let knownVals = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
+    let knownVals = Object.values(organStructure).flat().map(s => s.val).concat([percCC])
+        .concat(getAccordionStops().map(s => s.counterVal).filter(v => v !== undefined));
     let foundVals = new Set();
     [80, 81].forEach(cc => {
         if (track.controlChanges[cc]) {
@@ -2560,16 +2612,32 @@ function getStopStateAtTick(track, val, tick) {
 }
 
 
-// Accordion registers behave like radio buttons: switching one on writes OFF
-// events for any other accordion register that is currently on, so the MIDI
-// file itself never has two accordion registers on at once.
+// Writes ONE accordion stop event, but only if the stop is not already in that state.
+function setAccordionStop(track, val, label, on, tick) {
+    if (val === undefined || val === null) return;
+    if (getStopStateAtTick(track, val, tick) === on) return;
+    addEvent(on ? 81 : 80, val, `${label} ${on ? "ON" : "OFF"}`, "Accordion");
+}
+
+// Writes both real stops of a register: Swell (melody) and Great (countermelody).
+function writeAccordionRegister(track, reg, swellOn, greatOn, tick) {
+    setAccordionStop(track, reg.val,        `${reg.name} (melody)`,        swellOn, tick);
+    setAccordionStop(track, reg.counterVal, `${reg.name} (countermelody)`, greatOn,  tick);
+}
+
+// Accordion registers behave like radio buttons. Switching one on writes OFF
+// events for every stop of any other accordion register that is on, then turns
+// on this register's stops for the "Plays in" choice. The MIDI file itself never
+// has two accordion registers on at once.
 function handleAccordionToggle(val, name, isChecked) {
-    const accordionStops = getAccordionStops();
+    const registers = getAccordionStops();
+    const reg = registers.find(s => s.val === val);
+    if (!reg) return;
 
     if (isChecked) {
         // Update the switches on screen straight away.
-        accordionStops.forEach(other => {
-            if (other.val === val) return;
+        registers.forEach(other => {
+            if (other === reg) return;
             const cb = document.getElementById(`stop-${other.val}`);
             if (cb) cb.checked = false;
         });
@@ -2578,24 +2646,45 @@ function handleAccordionToggle(val, name, isChecked) {
     if (!currentMidi) return;
 
     const baseTick = parseInt(document.getElementById('tick-slider').value);
+    const track = getOrCreateSystemTrack();
 
     if (isChecked) {
-        const track = getOrCreateSystemTrack();
-
-        accordionStops.forEach(other => {
-            if (other.val === val) return;
-            if (getStopStateAtTick(track, other.val, baseTick)) {
-                addEvent(80, other.val, `${other.name} OFF`, "Accordion");
-            }
+        registers.forEach(other => {
+            if (other === reg) return;
+            writeAccordionRegister(track, other, false, false, baseTick);
         });
-
-        addEvent(81, val, `${name} ON`, "Accordion");
+        writeAccordionRegister(track, reg,
+            accordionDivisionMode !== "counter",
+            accordionDivisionMode !== "melody",
+            baseTick);
     } else {
-        addEvent(80, val, `${name} OFF`, "Accordion");
+        writeAccordionRegister(track, reg, false, false, baseTick);
     }
 
     draw();
 }
+
+// "Plays in" selector: both / melody only / countermelody only.
+window.handleAccordionDivisionChange = function(mode) {
+    accordionDivisionMode = mode;
+
+    if (!currentMidi) return;
+
+    const track = getSystemTrack();
+    if (!track) return;
+
+    const baseTick = parseInt(document.getElementById('tick-slider').value);
+
+    const reg = getAccordionStops().find(s =>
+        getStopStateAtTick(track, s.val, baseTick) ||
+        getStopStateAtTick(track, s.counterVal, baseTick));
+
+    // No register on yet: the choice is used when one is switched on.
+    if (!reg) return;
+
+    writeAccordionRegister(track, reg, mode !== "counter", mode !== "melody", baseTick);
+    draw();
+};
 
 window.handleStopToggle = function(val, name, manual, isChecked) {
     if (isUpdatingSwitches) return;
@@ -2765,6 +2854,13 @@ for (const [man, stops] of Object.entries(organStructure)) {
     }
 }
 
+// Accordion: one register, two real stops (Swell + Great).
+const accSwell = getAccordionStops().find(s => s.val === e.val);
+const accGreat = getAccordionStops().find(s => s.counterVal === e.val);
+
+if (accSwell) { foundName = accSwell.name + " (melody)"; manual = "Accordion"; }
+if (accGreat) { foundName = accGreat.name + " (countermelody)"; manual = "Accordion"; }
+
 // Then check Tremulant mappings.
 const counterStops =
     organStructure["Countermelody (Ch 4)"] || [];
@@ -2862,21 +2958,14 @@ if (p.name === "General Cancel") {
     }
     
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
-
-    // If the piston turns an accordion register on, that one is ON and every
-    // other accordion register is OFF (never two at once).
-    const pistonAccordionOn = getAccordionStops()
-        .map(s => s.val)
-        .find(v => p.activeStops.includes(v));
     
     activeOrganStops.forEach(val => {
         let targetCC = null;
         if (p.activeStops.includes(val)) targetCC = 81;
         else if (p.offStops.includes(val)) targetCC = 80;
 
-        if (pistonAccordionOn !== undefined && isAccordionVal(val)) {
-            targetCC = (val === pistonAccordionOn) ? 81 : 80;
-        }
+        // Accordion registers are written separately below (two stops each).
+        if (isAccordionVal(val)) targetCC = null;
         
         if (targetCC !== null) {
             if (!track.controlChanges[targetCC]) track.controlChanges[targetCC] = [];
@@ -2885,6 +2974,30 @@ if (p.name === "General Cancel") {
         }
     });
     
+    // Accordion: a piston switches at most ONE register on (in both divisions);
+    // every other register goes off. Each register is two real stops.
+    const chosenAccordion = getAccordionStops().find(s => p.activeStops.includes(s.val));
+    getAccordionStops().forEach(reg => {
+        if (reg.visible === false) return;
+
+        let ccForReg = null;
+        if (chosenAccordion) ccForReg = (reg === chosenAccordion) ? 81 : 80;
+        else if (p.offStops.includes(reg.val)) ccForReg = 80;
+        if (ccForReg === null) return;
+
+        [reg.val, reg.counterVal].forEach(stopVal => {
+            if (stopVal === undefined) return;
+            if (!track.controlChanges[ccForReg]) track.controlChanges[ccForReg] = [];
+            track.controlChanges[ccForReg].push({
+                ticks: baseTick + currentOffset,
+                number: ccForReg,
+                value: stopVal / 127,
+                time: currentMidi.header.ticksToSeconds(baseTick + currentOffset)
+            });
+            currentOffset++;
+        });
+    });
+
     [swellCC, 80, 81].forEach(cc => { if(track.controlChanges[cc]) track.controlChanges[cc].sort((a,b) => a.ticks - b.ticks); });
     let syncTick = Math.min(parseInt(document.getElementById('tick-slider').max), baseTick + currentOffset);
     document.getElementById('tick-slider').value = syncTick; 
@@ -3066,6 +3179,9 @@ counterStops.forEach(stop => {
 
         let state = !!stopStates[s.val];
 
+        // An accordion register shows as ON when either of its stops is on.
+        if (s.counterVal !== undefined) state = state || !!stopStates[s.counterVal];
+
         // Countermelody Tremulant mapping.
         if (
             s.tremulantInstrument !== undefined &&
@@ -3079,6 +3195,19 @@ counterStops.forEach(stop => {
 
         cb.checked = state;
     });
+
+    // Accordion "Plays in" selector follows the register that is on.
+    const activeAccordion = getAccordionStops().find(s =>
+        stopStates[s.val] || stopStates[s.counterVal]);
+
+    if (activeAccordion) {
+        accordionDivisionMode =
+            (stopStates[activeAccordion.val] && stopStates[activeAccordion.counterVal]) ? "both" :
+            (stopStates[activeAccordion.val] ? "melody" : "counter");
+
+        const divSelect = document.getElementById('accordion-division');
+        if (divSelect) divSelect.value = accordionDivisionMode;
+    }
 
     // Percussion
     let pc = document.getElementById(`stop-${percCC}`);
